@@ -220,8 +220,7 @@ const initialQuotes = [
 const TODAY = new Date();
 
 function isWithinLastNDays(dateStr, n) {
-  const [month, day, year] = dateStr.split("/").map(Number);
-  const parsed = new Date(year, month - 1, day);
+  const parsed = parseQuoteDate(dateStr);
   const diffDays = (TODAY - parsed) / (1000 * 60 * 60 * 24);
   return diffDays >= 0 && diffDays <= n;
 }
