@@ -341,10 +341,12 @@ function DashboardPage({ onOpenCustomer, onOpenQuote, onAddNewCustomer, onAddNew
       <div className="grid grid-cols-3 gap-4 mt-6">
         <div className="bg-white border rounded-sm p-5" style={{ borderColor: "#D8DCE1", borderLeft: `4px solid ${COLORS.blue}` }}>
           <div className="text-xs font-semibold tracking-wide" style={{ color: COLORS.slate }}>
-            TOTAL CUSTOMERS
+            TOTAL POLICIES
           </div>
           <div className="text-3xl font-bold mt-1" style={{ color: COLORS.blue }}>
-            {customers.length.toLocaleString()}
+            {customers
+              .reduce((total, c) => total + (c.carrier || c.policyNumber ? 1 : 0) + (c.additionalPolicies || []).length, 0)
+              .toLocaleString()}
           </div>
         </div>
         <div className="bg-white border rounded-sm p-5" style={{ borderColor: "#D8DCE1", borderLeft: `4px solid ${COLORS.slate}` }}>
