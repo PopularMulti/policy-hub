@@ -19,6 +19,8 @@ function rowToCustomer(row) {
     policyType: row.policy_type || "Personal Auto",
     carrier: row.carrier || "",
     policyNumber: row.policy_number || "",
+    effectiveDate: row.effective_date || "",
+    expiryDate: row.expiry_date || "",
     policyAmount: row.policy_amount || "",
     downPayment: row.down_payment || "",
     needsPolicyNumber: row.needs_policy_number || false,
@@ -27,6 +29,9 @@ function rowToCustomer(row) {
     vehicles: row.vehicles || [],
     documents: row.documents || [],
     notes: row.notes || [],
+    policyHistory: row.policy_history || [],
+    requotes: row.requotes || [],
+    activityLog: row.activity_log || [],
     additionalPolicies: row.additional_policies || [],
     followUp: row.follow_up || false,
     followUpReason: row.follow_up_reason || "",
@@ -51,6 +56,8 @@ function customerToRow(customer) {
   if ("policyType" in customer) row.policy_type = customer.policyType;
   if ("carrier" in customer) row.carrier = customer.carrier;
   if ("policyNumber" in customer) row.policy_number = customer.policyNumber;
+  if ("effectiveDate" in customer) row.effective_date = customer.effectiveDate;
+  if ("expiryDate" in customer) row.expiry_date = customer.expiryDate;
   if ("policyAmount" in customer) row.policy_amount = customer.policyAmount;
   if ("downPayment" in customer) row.down_payment = customer.downPayment;
   if ("needsPolicyNumber" in customer) row.needs_policy_number = customer.needsPolicyNumber;
@@ -59,6 +66,9 @@ function customerToRow(customer) {
   if ("vehicles" in customer) row.vehicles = customer.vehicles;
   if ("documents" in customer) row.documents = customer.documents;
   if ("notes" in customer) row.notes = customer.notes;
+  if ("policyHistory" in customer) row.policy_history = customer.policyHistory;
+  if ("requotes" in customer) row.requotes = customer.requotes;
+  if ("activityLog" in customer) row.activity_log = customer.activityLog;
   if ("additionalPolicies" in customer) row.additional_policies = customer.additionalPolicies;
   if ("followUp" in customer) row.follow_up = customer.followUp;
   if ("followUpReason" in customer) row.follow_up_reason = customer.followUpReason;

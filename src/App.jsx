@@ -2167,6 +2167,8 @@ function PolicyDetailView({ policy, employeeName, carrierPortalUrls, customerId,
   const [policyType, setPolicyType] = useState(policy.policyType || "Personal Auto");
   const [carrier, setCarrier] = useState(policy.carrier || "Progressive");
   const [policyNumber, setPolicyNumber] = useState(policy.policyNumber || "");
+  const [effectiveDate, setEffectiveDate] = useState(policy.effectiveDate || "");
+  const [expiryDate, setExpiryDate] = useState(policy.expiryDate || "");
   const [insuredName, setInsuredName] = useState(policy.insuredName || "");
   const [otherDetails, setOtherDetails] = useState(policy.otherDetails || "");
   const [documents, setDocuments] = useState(policy.documents || []);
@@ -2190,7 +2192,7 @@ function PolicyDetailView({ policy, employeeName, carrierPortalUrls, customerId,
 
   const saveFields = (patch) => {
     onSave({
-      policyType, carrier, policyNumber, insuredName, otherDetails, documents, requotes, policyHistoryLog, activityLog,
+      policyType, carrier, policyNumber, effectiveDate, expiryDate, insuredName, otherDetails, documents, requotes, policyHistoryLog, activityLog,
       ...patch,
     });
   };
@@ -2211,7 +2213,7 @@ function PolicyDetailView({ policy, employeeName, carrierPortalUrls, customerId,
       setActivityLog(updatedActivity);
     }
 
-    onSave({ policyType, carrier, policyNumber, insuredName, otherDetails, documents, requotes, policyHistoryLog: updatedHistory, activityLog: updatedActivity });
+    onSave({ policyType, carrier, policyNumber, effectiveDate, expiryDate, insuredName, otherDetails, documents, requotes, policyHistoryLog: updatedHistory, activityLog: updatedActivity });
     setSavedConfirmation(true);
     setTimeout(() => setSavedConfirmation(false), 2000);
   };
@@ -2324,6 +2326,28 @@ function PolicyDetailView({ policy, employeeName, carrierPortalUrls, customerId,
                 type="text"
                 value={policyNumber}
                 onChange={(e) => setPolicyNumber(e.target.value)}
+                className="w-full border rounded-sm px-3 py-2 text-sm outline-none"
+                style={{ borderColor: "#D8DCE1", color: COLORS.charcoal }}
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold mb-1" style={{ color: COLORS.charcoal }}>Effective Date</label>
+              <input
+                type="text"
+                value={effectiveDate}
+                onChange={(e) => setEffectiveDate(formatDateInput(e.target.value))}
+                placeholder="MM/DD/YYYY"
+                className="w-full border rounded-sm px-3 py-2 text-sm outline-none"
+                style={{ borderColor: "#D8DCE1", color: COLORS.charcoal }}
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold mb-1" style={{ color: COLORS.charcoal }}>Expiry Date</label>
+              <input
+                type="text"
+                value={expiryDate}
+                onChange={(e) => setExpiryDate(formatDateInput(e.target.value))}
+                placeholder="MM/DD/YYYY"
                 className="w-full border rounded-sm px-3 py-2 text-sm outline-none"
                 style={{ borderColor: "#D8DCE1", color: COLORS.charcoal }}
               />
@@ -2753,6 +2777,8 @@ function CustomerProfilePage({ customer, onPortalOpen, employeeName, onDeleteCus
   const [manualCarrier, setManualCarrier] = useState(customer.carrier);
   const [manualPolicyNumber, setManualPolicyNumber] = useState("");
   const [manualPolicyType, setManualPolicyType] = useState(primaryPolicyType);
+  const [manualEffectiveDate, setManualEffectiveDate] = useState(customer.effectiveDate || "");
+  const [manualExpiryDate, setManualExpiryDate] = useState(customer.expiryDate || "");
   const fileInputRef = React.useRef(null);
 
   const currentCarrier = overrideCarrier || customer.carrier;
@@ -2867,6 +2893,8 @@ function CustomerProfilePage({ customer, onPortalOpen, employeeName, onDeleteCus
   const openManualEdit = () => {
     setManualCarrier(currentCarrier);
     setManualPolicyNumber(isEditingPolicyNumber ? "" : policyNumberValue);
+    setManualEffectiveDate(customer.effectiveDate || "");
+    setManualExpiryDate(customer.expiryDate || "");
     setShowManualEdit(true);
   };
 
@@ -2878,7 +2906,15 @@ function CustomerProfilePage({ customer, onPortalOpen, employeeName, onDeleteCus
     setIsEditingPolicyNumber(false);
     setCurrentQuoteIndex(null);
     setShowManualEdit(false);
-    if (onUpdateCustomer) onUpdateCustomer(customer.name, { carrier: manualCarrier, policyNumber: manualPolicyNumber, policyType: manualPolicyType });
+    if (onUpdateCustomer) {
+      onUpdateCustomer(customer.name, {
+        carrier: manualCarrier,
+        policyNumber: manualPolicyNumber,
+        policyType: manualPolicyType,
+        effectiveDate: manualEffectiveDate,
+        expiryDate: manualExpiryDate,
+      });
+    }
 
     setPolicyHistory((prev) => [
       ...closePolicyHistoryRow(prev),
@@ -3243,6 +3279,14 @@ function CustomerProfilePage({ customer, onPortalOpen, employeeName, onDeleteCus
                 <div className="text-xs mt-0.5" style={{ color: "white" }}>Enter the number once the carrier issues it, then click Done</div>
               )}
             </div>
+            <div>
+              <div className="text-xs font-bold" style={{ color: "rgba(255,255,255,0.7)" }}>EFFECTIVE DATE</div>
+              <div className="text-lg font-bold text-white">{customer.effectiveDate || "-"}</div>
+            </div>
+            <div>
+              <div className="text-xs font-bold" style={{ color: "rgba(255,255,255,0.7)" }}>EXPIRY DATE</div>
+              <div className="text-lg font-bold text-white">{customer.expiryDate || "-"}</div>
+            </div>
           </div>
           <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
             <button
@@ -3312,6 +3356,28 @@ function CustomerProfilePage({ customer, onPortalOpen, employeeName, onDeleteCus
                   style={{ borderColor: "#D8DCE1", color: COLORS.charcoal }}
                 />
               </div>
+              <div>
+                <label className="block text-xs font-semibold mb-1" style={{ color: COLORS.charcoal }}>Effective Date</label>
+                <input
+                  type="text"
+                  value={manualEffectiveDate}
+                  onChange={(e) => setManualEffectiveDate(formatDateInput(e.target.value))}
+                  placeholder="MM/DD/YYYY"
+                  className="w-full border rounded-sm px-3 py-2 text-sm outline-none"
+                  style={{ borderColor: "#D8DCE1", color: COLORS.charcoal }}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold mb-1" style={{ color: COLORS.charcoal }}>Expiry Date</label>
+                <input
+                  type="text"
+                  value={manualExpiryDate}
+                  onChange={(e) => setManualExpiryDate(formatDateInput(e.target.value))}
+                  placeholder="MM/DD/YYYY"
+                  className="w-full border rounded-sm px-3 py-2 text-sm outline-none"
+                  style={{ borderColor: "#D8DCE1", color: COLORS.charcoal }}
+                />
+              </div>
             </div>
             <div className="flex gap-3">
               <button onClick={saveManualEdit} className="px-4 py-1.5 text-white text-xs font-semibold rounded-sm" style={{ backgroundColor: COLORS.blue }}>
@@ -3345,6 +3411,14 @@ function CustomerProfilePage({ customer, onPortalOpen, employeeName, onDeleteCus
               <div>
                 <div className="text-xs font-bold" style={{ color: "rgba(255,255,255,0.7)" }}>POLICY NUMBER</div>
                 <div className="text-lg font-bold text-white">{p.policyNumber || "-"}</div>
+              </div>
+              <div>
+                <div className="text-xs font-bold" style={{ color: "rgba(255,255,255,0.7)" }}>EFFECTIVE DATE</div>
+                <div className="text-lg font-bold text-white">{p.effectiveDate || "-"}</div>
+              </div>
+              <div>
+                <div className="text-xs font-bold" style={{ color: "rgba(255,255,255,0.7)" }}>EXPIRY DATE</div>
+                <div className="text-lg font-bold text-white">{p.expiryDate || "-"}</div>
               </div>
             </div>
             <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
