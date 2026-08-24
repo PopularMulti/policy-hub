@@ -4820,7 +4820,12 @@ export default function App() {
     setCustomers((prev) => prev.map((c) => (c.id === target.id ? { ...c, ...patch } : c)));
     const saved = await updateCustomerById(target.id, patch);
     if (saved) {
-      setCustomers((prev) => prev.map((c) => (c.id === saved.id ? saved : c)));
+      // Merge only the fields this call actually patched, rather than replacing
+      // the whole row with Supabase's response. Two saves can fire back-to-back
+      // for the same customer (e.g. driver info + the activity log entry it
+      // creates) - replacing the whole row here could clobber whichever one's
+      // response comes back second with a stale snapshot of the other's fields.
+      setCustomers((prev) => prev.map((c) => (c.id === target.id ? { ...c, ...patch } : c)));
     }
   };
 
