@@ -3446,9 +3446,16 @@ function CustomerProfilePage({ customer, onPortalOpen, employeeName, onDeleteCus
               initialPolicyAmount={customer.policyAmount || ""}
               initialDownPayment={customer.downPayment || ""}
               onSaveDetails={({ drivers, vehicles, policyAmount, downPayment }) => {
+                const searchableDrivers = drivers && drivers.length
+                  ? drivers.map((d, i) => ({
+                      name: i === 0 ? customer.name : `${d.firstName || ""} ${d.lastName || ""}`.trim(),
+                      relation: d.relation || "Self",
+                    }))
+                  : [{ name: customer.name, relation: "Self" }];
                 if (onUpdateCustomer) {
                   onUpdateCustomer(customer.name, {
                     driverDetails: drivers,
+                    drivers: searchableDrivers,
                     vehicles,
                     policyAmount,
                     downPayment,
