@@ -3,6 +3,7 @@ import { Search, Lock } from "lucide-react";
 import { supabase } from "./supabaseClient";
 import { fetchCustomers, insertCustomer, updateCustomerById, deleteCustomerById } from "./customerData";
 import { fetchQuotes, insertQuote, updateQuoteById, deleteQuoteById } from "./quoteData";
+import { uploadDocumentFile, getDocumentUrl } from "./documentStorage";
 
 const COLORS = {
   blue: "#1768A5",
@@ -2139,7 +2140,7 @@ const policyHistorySample = [
   { startDate: "07/28/2026", endDate: "Present", carrier: "Progressive", policyNumber: "123456", type: "Personal Auto", reason: "Requote accepted - current policy" },
 ];
 
-function PolicyDetailView({ policy, employeeName, carrierPortalUrls, onSave, onRemove, onBack }) {
+function PolicyDetailView({ policy, employeeName, carrierPortalUrls, customerId, onSave, onRemove, onBack }) {
   const [subTab, setSubTab] = useState("Overview");
   const [policyType, setPolicyType] = useState(policy.policyType || "Personal Auto");
   const [carrier, setCarrier] = useState(policy.carrier || "Progressive");
@@ -2193,17 +2194,29 @@ function PolicyDetailView({ policy, employeeName, carrierPortalUrls, onSave, onR
     setTimeout(() => setSavedConfirmation(false), 2000);
   };
 
-  const handleFileSelected = (e) => {
+  const [uploadingDoc, setUploadingDoc] = useState(false);
+
+  const handleFileSelected = async (e) => {
     const file = e.target.files && e.target.files[0];
     if (!file) return;
+    setUploadingDoc(true);
+    const path = await uploadDocumentFile(file, customerId);
+    setUploadingDoc(false);
+    if (!path) return;
     const updatedDocs = [
-      { name: file.name, category: docCategory, date: "Just now", uploadedBy: employeeName || "Unknown" },
+      { name: file.name, category: docCategory, date: "Just now", uploadedBy: employeeName || "Unknown", path },
       ...documents,
     ];
     setDocuments(updatedDocs);
     const activityEntry = logActivity("Document uploaded", `${file.name} (${docCategory})`);
     onSave({ policyType, carrier, policyNumber, insuredName, otherDetails, documents: updatedDocs, requotes, policyHistoryLog, activityLog: [activityEntry, ...activityLog] });
     e.target.value = "";
+  };
+
+  const openDocument = async (doc) => {
+    if (!doc.path) return;
+    const url = await getDocumentUrl(doc.path);
+    if (url) window.open(url, "_blank");
   };
 
   const saveManualRequote = () => {
@@ -2539,10 +2552,11 @@ function PolicyDetailView({ policy, employeeName, carrierPortalUrls, onSave, onR
             </div>
             <button
               onClick={() => fileInputRef.current && fileInputRef.current.click()}
+              disabled={uploadingDoc}
               className="px-4 py-2 text-white text-sm font-semibold rounded-sm whitespace-nowrap"
-              style={{ backgroundColor: COLORS.blue }}
+              style={{ backgroundColor: COLORS.blue, opacity: uploadingDoc ? 0.6 : 1 }}
             >
-              + UPLOAD DOCUMENT
+              {uploadingDoc ? "UPLOADING..." : "+ UPLOAD DOCUMENT"}
             </button>
             <span className="text-xs" style={{ color: COLORS.slate }}>PDF files only</span>
           </div>
@@ -2557,7 +2571,15 @@ function PolicyDetailView({ policy, employeeName, carrierPortalUrls, onSave, onR
             <tbody>
               {documents.map((d, i) => (
                 <tr key={i} style={{ backgroundColor: i % 2 ? COLORS.lightGray : "white" }}>
-                  <td className="px-4 py-3" style={{ color: COLORS.blue }}>{d.name}</td>
+                  <td className="px-4 py-3">
+                    {d.path ? (
+                      <button onClick={() => openDocument(d)} className="font-semibold underline" style={{ color: COLORS.blue }}>
+                        {d.name}
+                      </button>
+                    ) : (
+                      <span style={{ color: COLORS.charcoal }}>{d.name}</span>
+                    )}
+                  </td>
                   <td className="px-4 py-3" style={{ color: COLORS.charcoal }}>{d.category}</td>
                   <td className="px-4 py-3" style={{ color: COLORS.charcoal }}>{d.date}</td>
                   <td className="px-4 py-3" style={{ color: COLORS.charcoal }}>{d.uploadedBy}</td>
@@ -2600,7 +2622,7 @@ function PolicyDetailView({ policy, employeeName, carrierPortalUrls, onSave, onR
     </div>
   );
 }
-function CustomerProfilePage({ customer, requotes, onRequotesChange, onPortalOpen, employeeName, onActivityChange, onDeleteCustomer, onUpdateCustomer, carrierPortalUrls, employees }) {
+function CustomerProfilePage({ customer, onPortalOpen, employeeName, onDeleteCustomer, onUpdateCustomer, carrierPortalUrls, employees }) {
   const [tab, setTab] = useState("Overview");
   const [selectedPolicyIndex, setSelectedPolicyIndex] = useState(null);
   const [confirmDeleteCustomer, setConfirmDeleteCustomer] = useState(false);
@@ -2611,11 +2633,13 @@ function CustomerProfilePage({ customer, requotes, onRequotesChange, onPortalOpe
   const [noteText, setNoteText] = useState("");
   const creatorName = (employees || []).find((e) => e.id === customer.createdBy)?.name || "Unknown";
   const createdAtDisplay = customer.createdAt ? new Date(customer.createdAt).toLocaleString("en-US") : "";
-  const [activityLog, setActivityLog] = useState([
-    ...(customer.createdBy
+  const [activityLog, setActivityLog] = useState(
+    customer.activityLog && customer.activityLog.length
+      ? customer.activityLog
+      : customer.createdBy
       ? [{ when: createdAtDisplay || "Unknown", employee: creatorName, action: "Customer profile created", detail: `Added ${customer.name}` }]
-      : []),
-  ]);
+      : []
+  );
   const [documents, setDocuments] = useState(customer.documents || []);
   const [docCategory, setDocCategory] = useState("Declaration Page");
   const [quoteNotes, setQuoteNotes] = useState([
@@ -2624,7 +2648,7 @@ function CustomerProfilePage({ customer, requotes, onRequotesChange, onPortalOpe
   const [quoteNoteText, setQuoteNoteText] = useState("");
 
   useEffect(() => {
-    if (onActivityChange) onActivityChange(customer.name, activityLog);
+    if (onUpdateCustomer) onUpdateCustomer(customer.name, { activityLog });
   }, [activityLog]);
 
   const [currentQuoteIndex, setCurrentQuoteIndex] = useState(null);
@@ -2632,11 +2656,15 @@ function CustomerProfilePage({ customer, requotes, onRequotesChange, onPortalOpe
   const [primaryPolicyType, setPrimaryPolicyType] = useState(customer.policyType || "Personal Auto");
   const [policyNumberValue, setPolicyNumberValue] = useState(customer.policyNumber);
   const [isEditingPolicyNumber, setIsEditingPolicyNumber] = useState(!!customer.needsPolicyNumber);
-  const [policyHistory, setPolicyHistory] = useState(policyHistorySample);
-  const [quoteHistory, setQuoteHistory] = useState(requotes || []);
+  const [policyHistory, setPolicyHistory] = useState(customer.policyHistory || []);
+  const [quoteHistory, setQuoteHistory] = useState(customer.requotes || []);
 
   useEffect(() => {
-    if (onRequotesChange) onRequotesChange(quoteHistory);
+    if (onUpdateCustomer) onUpdateCustomer(customer.name, { policyHistory });
+  }, [policyHistory]);
+
+  useEffect(() => {
+    if (onUpdateCustomer) onUpdateCustomer(customer.name, { requotes: quoteHistory });
   }, [quoteHistory]);
   const [isEditingCustomer, setIsEditingCustomer] = useState(false);
   const [contactInfoError, setContactInfoError] = useState("");
@@ -2862,11 +2890,17 @@ function CustomerProfilePage({ customer, requotes, onRequotesChange, onPortalOpe
     ]);
   };
 
-  const handleFileSelected = (e) => {
+  const [uploadingDoc, setUploadingDoc] = useState(false);
+
+  const handleFileSelected = async (e) => {
     const file = e.target.files && e.target.files[0];
     if (!file) return;
+    setUploadingDoc(true);
+    const path = await uploadDocumentFile(file, customer.id);
+    setUploadingDoc(false);
+    if (!path) return;
     const updatedDocs = [
-      { name: file.name, category: docCategory, date: "Just now", uploadedBy: employeeName || "Unknown" },
+      { name: file.name, category: docCategory, date: "Just now", uploadedBy: employeeName || "Unknown", path },
       ...documents,
     ];
     setDocuments(updatedDocs);
@@ -2876,6 +2910,12 @@ function CustomerProfilePage({ customer, requotes, onRequotesChange, onPortalOpe
       ...prev,
     ]);
     e.target.value = "";
+  };
+
+  const openDocument = async (doc) => {
+    if (!doc.path) return;
+    const url = await getDocumentUrl(doc.path);
+    if (url) window.open(url, "_blank");
   };
 
   const addQuoteNote = () => {
@@ -3311,6 +3351,7 @@ function CustomerProfilePage({ customer, requotes, onRequotesChange, onPortalOpe
           policy={(customer.additionalPolicies || [])[selectedPolicyIndex]}
           employeeName={employeeName}
           carrierPortalUrls={carrierPortalUrls}
+          customerId={customer.id}
           onBack={() => setSelectedPolicyIndex(null)}
           onSave={(patch) => {
             const updated = (customer.additionalPolicies || []).map((p, idx) => (idx === selectedPolicyIndex ? { ...p, ...patch } : p));
@@ -3764,10 +3805,11 @@ function CustomerProfilePage({ customer, requotes, onRequotesChange, onPortalOpe
               </div>
               <button
                 onClick={() => fileInputRef.current && fileInputRef.current.click()}
+                disabled={uploadingDoc}
                 className="px-4 py-2 text-white text-sm font-semibold rounded-sm"
-                style={{ backgroundColor: COLORS.blue }}
+                style={{ backgroundColor: COLORS.blue, opacity: uploadingDoc ? 0.6 : 1 }}
               >
-                + UPLOAD DOCUMENT
+                {uploadingDoc ? "UPLOADING..." : "+ UPLOAD DOCUMENT"}
               </button>
               <span className="text-xs" style={{ color: COLORS.slate }}>PDF files only</span>
             </div>
@@ -3782,7 +3824,15 @@ function CustomerProfilePage({ customer, requotes, onRequotesChange, onPortalOpe
               <tbody>
                 {documents.map((d, i) => (
                   <tr key={i} style={{ backgroundColor: i % 2 ? COLORS.lightGray : "white" }}>
-                    <td className="px-4 py-3" style={{ color: COLORS.blue }}>{d.name}</td>
+                    <td className="px-4 py-3">
+                      {d.path ? (
+                        <button onClick={() => openDocument(d)} className="font-semibold underline" style={{ color: COLORS.blue }}>
+                          {d.name}
+                        </button>
+                      ) : (
+                        <span style={{ color: COLORS.charcoal }}>{d.name}</span>
+                      )}
+                    </td>
                     <td className="px-4 py-3" style={{ color: COLORS.charcoal }}>{d.category}</td>
                     <td className="px-4 py-3" style={{ color: COLORS.charcoal }}>{d.date}</td>
                     <td className="px-4 py-3" style={{ color: COLORS.charcoal }}>{d.uploadedBy}</td>
@@ -4279,10 +4329,8 @@ function CarrierPortalLinksPanel({ carriers, onUpdateUrl, onRemove }) {
   );
 }
 
-function AuditLogPanel({ activityLogByCustomer }) {
-  const real = Object.entries(activityLogByCustomer || {}).flatMap(([customerName, entries]) =>
-    entries.map((e) => ({ ...e, customer: customerName }))
-  );
+function AuditLogPanel({ customers }) {
+  const real = (customers || []).flatMap((c) => (c.activityLog || []).map((e) => ({ ...e, customer: c.name })));
   const rows = real.length > 0 ? real : auditLogSample.map((a) => ({ ...a, customer: "-" }));
 
   return (
@@ -4505,7 +4553,7 @@ function SystemSettingsPanel() {
   );
 }
 
-function AdminPage({ activityLogByCustomer, customers, employees, setEmployees, carriers, setCarriers }) {
+function AdminPage({ customers, employees, setEmployees, carriers, setCarriers }) {
   const [section, setSection] = useState("Employees");
 
   const addCarrier = (name) => {
@@ -4564,7 +4612,7 @@ function AdminPage({ activityLogByCustomer, customers, employees, setEmployees, 
             <TagListEditor initialTags={["ID", "Declaration Page", "Application", "Insurance Card", "Signed Form"]} />
           </div>
         )}
-        {section === "Audit Log" && <AuditLogPanel activityLogByCustomer={activityLogByCustomer} />}
+        {section === "Audit Log" && <AuditLogPanel customers={customers} />}
         {section === "Data Management" && <DataManagementPanel customers={customers} />}
         {section === "Duplicate Customer Review" && <DuplicateReviewPanel />}
         {section === "System Settings" && <SystemSettingsPanel />}
@@ -4745,14 +4793,10 @@ export default function App() {
   const [adminUnlocked, setAdminUnlocked] = useState(false);
   const [quotes, setQuotes] = useState([]);
   const [quotesLoading, setQuotesLoading] = useState(true);
-  const [requoteHistoryByCustomer, setRequoteHistoryByCustomer] = useState({
-    "Maria Rodriguez": customerQuoteHistory,
-  });
   const [activeCustomerNames, setActiveCustomerNames] = useState(new Set());
   const [employees, setEmployees] = useState(initialEmployees);
   const [carriers, setCarriers] = useState(initialCarriers);
   const carrierPortalUrls = Object.fromEntries(carriers.map((c) => [c.name, c.portalUrl]));
-  const [activityLogByCustomer, setActivityLogByCustomer] = useState({});
 
   useEffect(() => {
     if (authStep !== "app") return;
@@ -4767,10 +4811,6 @@ export default function App() {
       setQuotesLoading(false);
     });
   }, [authStep]);
-
-  const updateCustomerActivity = (customerName, entries) => {
-    setActivityLogByCustomer((prev) => ({ ...prev, [customerName]: entries }));
-  };
 
   const updateCustomerRecord = async (customerName, patch) => {
     const target = customers.find((c) => c.name === customerName);
@@ -4823,15 +4863,10 @@ export default function App() {
   };
 
   const addRequoteToCustomer = (customerName, record) => {
-    setRequoteHistoryByCustomer((prev) => ({
-      ...prev,
-      [customerName]: [record, ...(prev[customerName] || [])],
-    }));
+    const target = customers.find((c) => c.name === customerName);
+    if (!target) return;
+    updateCustomerRecord(customerName, { requotes: [record, ...(target.requotes || [])] });
     markCustomerActive(customerName);
-  };
-
-  const updateCustomerRequotes = (customerName, list) => {
-    setRequoteHistoryByCustomer((prev) => ({ ...prev, [customerName]: list }));
   };
 
   const addCustomer = async (record) => {
@@ -4847,16 +4882,6 @@ export default function App() {
     const ok = await deleteCustomerById(customer.id);
     if (!ok) return;
     setCustomers((prev) => prev.filter((c) => c.id !== customer.id));
-    setActivityLogByCustomer((prev) => {
-      const next = { ...prev };
-      delete next[customer.name];
-      return next;
-    });
-    setRequoteHistoryByCustomer((prev) => {
-      const next = { ...prev };
-      delete next[customer.name];
-      return next;
-    });
     setPage("CustomersList");
   };
 
@@ -4983,11 +5008,8 @@ export default function App() {
       {page === "Customer" && selectedCustomer && (
         <CustomerProfilePage
           customer={selectedCustomer}
-          requotes={requoteHistoryByCustomer[selectedCustomer.name] || []}
-          onRequotesChange={(list) => updateCustomerRequotes(selectedCustomer.name, list)}
           onPortalOpen={markCustomerActive}
           employeeName={employeeName}
-          onActivityChange={updateCustomerActivity}
           onDeleteCustomer={deleteCustomer}
           onUpdateCustomer={updateCustomerRecord}
           carrierPortalUrls={carrierPortalUrls}
@@ -5021,7 +5043,6 @@ export default function App() {
       {page === "Admin" && !adminUnlocked && <AdminGatePage onUnlock={() => setAdminUnlocked(true)} />}
       {page === "Admin" && adminUnlocked && (
         <AdminPage
-          activityLogByCustomer={activityLogByCustomer}
           customers={customers}
           employees={employees}
           setEmployees={setEmployees}
