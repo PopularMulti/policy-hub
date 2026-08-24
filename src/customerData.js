@@ -21,6 +21,8 @@ function rowToCustomer(row) {
     policyNumber: row.policy_number || "",
     effectiveDate: row.effective_date || "",
     expiryDate: row.expiry_date || "",
+    insuredName: row.insured_name || "",
+    otherDetails: row.other_details || "",
     policyAmount: row.policy_amount || "",
     downPayment: row.down_payment || "",
     needsPolicyNumber: row.needs_policy_number || false,
@@ -58,6 +60,8 @@ function customerToRow(customer) {
   if ("policyNumber" in customer) row.policy_number = customer.policyNumber;
   if ("effectiveDate" in customer) row.effective_date = customer.effectiveDate;
   if ("expiryDate" in customer) row.expiry_date = customer.expiryDate;
+  if ("insuredName" in customer) row.insured_name = customer.insuredName;
+  if ("otherDetails" in customer) row.other_details = customer.otherDetails;
   if ("policyAmount" in customer) row.policy_amount = customer.policyAmount;
   if ("downPayment" in customer) row.down_payment = customer.downPayment;
   if ("needsPolicyNumber" in customer) row.needs_policy_number = customer.needsPolicyNumber;

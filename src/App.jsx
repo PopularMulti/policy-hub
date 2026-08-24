@@ -217,7 +217,7 @@ const initialQuotes = [
   },
 ];
 
-const TODAY = new Date("2026-08-10");
+const TODAY = new Date();
 
 function isWithinLastNDays(dateStr, n) {
   const [month, day, year] = dateStr.split("/").map(Number);
@@ -288,7 +288,7 @@ function TopHeader({ activePage, onNavigate, employeeName, onSwitchUser }) {
   );
 }
 
-function DashboardPage({ onOpenCustomer, onOpenQuote, onAddNewCustomer, onAddNewQuote, quotes, customers, onPortalOpen, activeCustomerNames, carrierPortalUrls }) {
+function DashboardPage({ onOpenCustomer, onOpenQuote, onAddNewCustomer, onAddNewQuote, onGoToQuotes, quotes, customers, onPortalOpen, activeCustomerNames, carrierPortalUrls }) {
   const [query, setQuery] = useState("");
   const [dateSort, setDateSort] = useState("desc");
   const results = query.trim() ? customers.filter((c) => customerMatchesQuery(c, query)) : [];
@@ -357,14 +357,18 @@ function DashboardPage({ onOpenCustomer, onOpenQuote, onAddNewCustomer, onAddNew
             {customers.filter((c) => activeCustomerNames && activeCustomerNames.has(c.name)).length.toLocaleString()}
           </div>
         </div>
-        <div className="bg-white border rounded-sm p-5" style={{ borderColor: "#D8DCE1", borderLeft: `4px solid ${COLORS.red}` }}>
+        <button
+          onClick={onGoToQuotes}
+          className="bg-white border rounded-sm p-5 text-left hover:bg-blue-50"
+          style={{ borderColor: "#D8DCE1", borderLeft: `4px solid ${COLORS.red}` }}
+        >
           <div className="text-xs font-semibold tracking-wide" style={{ color: COLORS.slate }}>
             OPEN QUOTES
           </div>
           <div className="text-3xl font-bold mt-1" style={{ color: COLORS.red }}>
             {quotes.length.toLocaleString()}
           </div>
-        </div>
+        </button>
       </div>
 
       <div className="mt-6 flex gap-3">
@@ -516,13 +520,21 @@ function AddCustomerPage({ onBack, customers, onAddCustomer, onOpenCustomer, def
   const [driverSyncKey, setDriverSyncKey] = useState("");
   const [form, setForm] = useState({ companyName: "", phone: "", email: "", address: "", city: "", state: "", zip: "", office: defaultOffice || "Rampart Office" });
   const [carrier, setCarrier] = useState("Progressive");
+  const [policyType, setPolicyType] = useState("Personal Auto");
   const [policyNumber, setPolicyNumber] = useState("");
+  const [effectiveDate, setEffectiveDate] = useState("");
+  const [expiryDate, setExpiryDate] = useState("");
+  const [insuredName, setInsuredName] = useState("");
+  const [otherDetails, setOtherDetails] = useState("");
   const [driverDetails, setDriverDetails] = useState(null);
   const [vehicles, setVehicles] = useState(null);
   const [policyAmount, setPolicyAmount] = useState("");
   const [downPayment, setDownPayment] = useState("");
   const [duplicateMatch, setDuplicateMatch] = useState(null);
   const [savedMessage, setSavedMessage] = useState("");
+
+  const VEHICLE_POLICY_TYPES = ["Personal Auto", "Commercial Auto", "Motorcycle"];
+  const isVehiclePolicy = VEHICLE_POLICY_TYPES.includes(policyType);
 
   const updateField = (field, value) => {
     let v = value;
@@ -554,15 +566,22 @@ function AddCustomerPage({ onBack, customers, onAddCustomer, onOpenCustomer, def
     zip: form.zip,
     office: form.office,
     carrier,
+    policyType,
     policyNumber,
-    drivers: driverDetails && driverDetails.length
-      ? driverDetails.map((d, i) => ({
-          name: i === 0 ? customerName : `${d.firstName || ""} ${d.lastName || ""}`.trim(),
-          relation: d.relation || "Self",
-        }))
+    effectiveDate,
+    expiryDate,
+    insuredName: isVehiclePolicy ? "" : insuredName,
+    otherDetails: isVehiclePolicy ? "" : otherDetails,
+    drivers: isVehiclePolicy
+      ? driverDetails && driverDetails.length
+        ? driverDetails.map((d, i) => ({
+            name: i === 0 ? customerName : `${d.firstName || ""} ${d.lastName || ""}`.trim(),
+            relation: d.relation || "Self",
+          }))
+        : [{ name: customerName, relation: "Self" }]
       : [{ name: customerName, relation: "Self" }],
-    driverDetails: driverDetails || [],
-    vehicles: vehicles || [],
+    driverDetails: isVehiclePolicy ? driverDetails || [] : [],
+    vehicles: isVehiclePolicy ? vehicles || [] : [],
     policyAmount,
     downPayment,
   });
@@ -724,6 +743,23 @@ function AddCustomerPage({ onBack, customers, onAddCustomer, onOpenCustomer, def
             </select>
           </div>
           <div>
+            <label className="block text-xs font-semibold mb-1" style={{ color: COLORS.charcoal }}>Policy Type</label>
+            <select
+              value={policyType}
+              onChange={(e) => setPolicyType(e.target.value)}
+              className="w-full border rounded-sm px-3 py-2 text-sm outline-none"
+              style={{ borderColor: "#D8DCE1", color: COLORS.charcoal }}
+            >
+              <option>Personal Auto</option>
+              <option>Commercial Auto</option>
+              <option>General Liability</option>
+              <option>Homeowners</option>
+              <option>Renters</option>
+              <option>Motorcycle</option>
+              <option>Other</option>
+            </select>
+          </div>
+          <div>
             <label className="block text-xs font-semibold mb-1" style={{ color: COLORS.charcoal }}>Current Company</label>
             <select
               value={carrier}
@@ -736,7 +772,7 @@ function AddCustomerPage({ onBack, customers, onAddCustomer, onOpenCustomer, def
               ))}
             </select>
           </div>
-          <div className="col-span-2">
+          <div>
             <label className="block text-xs font-semibold mb-1" style={{ color: COLORS.charcoal }}>Policy Number</label>
             <input
               type="text"
@@ -746,15 +782,66 @@ function AddCustomerPage({ onBack, customers, onAddCustomer, onOpenCustomer, def
               style={{ borderColor: "#D8DCE1", color: COLORS.charcoal }}
             />
           </div>
+          <div>
+            <label className="block text-xs font-semibold mb-1" style={{ color: COLORS.charcoal }}>Effective Date</label>
+            <input
+              type="text"
+              value={effectiveDate}
+              onChange={(e) => setEffectiveDate(formatDateInput(e.target.value))}
+              placeholder="MM/DD/YYYY"
+              className="w-full border rounded-sm px-3 py-2 text-sm outline-none"
+              style={{ borderColor: "#D8DCE1", color: COLORS.charcoal }}
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold mb-1" style={{ color: COLORS.charcoal }}>Expiry Date</label>
+            <input
+              type="text"
+              value={expiryDate}
+              onChange={(e) => setExpiryDate(formatDateInput(e.target.value))}
+              placeholder="MM/DD/YYYY"
+              className="w-full border rounded-sm px-3 py-2 text-sm outline-none"
+              style={{ borderColor: "#D8DCE1", color: COLORS.charcoal }}
+            />
+          </div>
         </div>
 
-        <AdditionalInfoSection
-          key={driverSyncKey}
-          lockable
-          onSaveDetails={handleSaveDetails}
-          initialDriverName={driverSyncKey}
-          showPayment={false}
-        />
+        {!isVehiclePolicy && (
+          <div className="grid grid-cols-2 gap-4 mb-4">
+            <div>
+              <label className="block text-xs font-semibold mb-1" style={{ color: COLORS.charcoal }}>Insured</label>
+              <input
+                type="text"
+                value={insuredName}
+                onChange={(e) => setInsuredName(toTitleCase(e.target.value))}
+                placeholder="Name on the policy"
+                className="w-full border rounded-sm px-3 py-2 text-sm outline-none"
+                style={{ borderColor: "#D8DCE1", color: COLORS.charcoal }}
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold mb-1" style={{ color: COLORS.charcoal }}>Other Details</label>
+              <input
+                type="text"
+                value={otherDetails}
+                onChange={(e) => setOtherDetails(e.target.value)}
+                placeholder="e.g. property address, coverage notes"
+                className="w-full border rounded-sm px-3 py-2 text-sm outline-none"
+                style={{ borderColor: "#D8DCE1", color: COLORS.charcoal }}
+              />
+            </div>
+          </div>
+        )}
+
+        {isVehiclePolicy && (
+          <AdditionalInfoSection
+            key={driverSyncKey}
+            lockable
+            onSaveDetails={handleSaveDetails}
+            initialDriverName={driverSyncKey}
+            showPayment={false}
+          />
+        )}
 
         <button onClick={saveCustomer} className="mt-5 px-5 py-2 text-white text-sm font-semibold rounded-sm" style={{ backgroundColor: COLORS.blue }}>
           SAVE CUSTOMER
@@ -5065,6 +5152,7 @@ export default function App() {
           onOpenQuote={openQuote}
           onAddNewCustomer={() => setPage("AddCustomer")}
           onAddNewQuote={addNewQuote}
+          onGoToQuotes={() => setPage("QuotesList")}
           quotes={quotes}
           customers={customers}
           onPortalOpen={markCustomerActive}
