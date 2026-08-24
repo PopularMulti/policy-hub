@@ -21,6 +21,7 @@ function rowToQuote(row) {
     dateQuoted: row.date_quoted || "",
     drivers: row.drivers || [],
     vehicles: row.vehicles || [],
+    notes: row.notes || [],
     existingCustomer: row.existing_customer || false,
     bound: row.bound || false,
     createdBy: row.created_by || "",
@@ -46,6 +47,7 @@ function quoteToRow(quote) {
   if ("dateQuoted" in quote) row.date_quoted = quote.dateQuoted;
   if ("drivers" in quote) row.drivers = quote.drivers;
   if ("vehicles" in quote) row.vehicles = quote.vehicles;
+  if ("notes" in quote) row.notes = quote.notes;
   if ("existingCustomer" in quote) row.existing_customer = quote.existingCustomer;
   if ("bound" in quote) row.bound = quote.bound;
   if ("createdBy" in quote) row.created_by = quote.createdBy || null;

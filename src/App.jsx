@@ -4,6 +4,8 @@ import { supabase } from "./supabaseClient";
 import { fetchCustomers, insertCustomer, updateCustomerById, deleteCustomerById } from "./customerData";
 import { fetchQuotes, insertQuote, updateQuoteById, deleteQuoteById } from "./quoteData";
 import { uploadDocumentFile, getDocumentUrl } from "./documentStorage";
+import { fetchCarriers, insertCarrier, updateCarrierById, deleteCarrierById } from "./carrierData";
+import { fetchEmployees, updateEmployeeById } from "./employeeData";
 
 const COLORS = {
   blue: "#1768A5",
@@ -125,14 +127,6 @@ const policies = [
   { carrier: "Progressive", type: "Personal Auto", policyNumber: "123456", premium: "$142 / mo", office: "Rampart Office" },
   { carrier: "National General", type: "Homeowners", policyNumber: "789012", premium: "$89 / mo", office: "Rampart Office" },
   { carrier: "Bristol West", type: "Commercial Auto", policyNumber: "445210", premium: "$310 / mo", office: "Harwin Office" },
-];
-
-const allPolicies = [
-  { customer: "Maria Rodriguez", carrier: "Progressive", type: "Personal Auto", policyNumber: "123456", premium: "$142 / mo", office: "Harwin Office" },
-  { customer: "Carlos Diaz", carrier: "National General", type: "Homeowners", policyNumber: "789012", premium: "$89 / mo", office: "Rampart Office" },
-  { customer: "ABC Trucking LLC", carrier: "Bristol West", type: "Commercial Auto", policyNumber: "445210", premium: "$310 / mo", office: "Rampart Office" },
-  { customer: "John Alvarez", carrier: "Progressive", type: "Personal Auto", policyNumber: "551029", premium: "$118 / mo", office: "Rampart Office" },
-  { customer: "Wanda Lee", carrier: "Nautilus", type: "Homeowners", policyNumber: "902744", premium: "$95 / mo", office: "Harwin Office" },
 ];
 
 function findDuplicateCustomer(customersList, name, phone) {
@@ -866,10 +860,36 @@ function CustomersListPage({ onOpenCustomer, onAddNewCustomer, customers, onPort
 
 function PoliciesListPage({ onOpenCustomer, customers, onPortalOpen, carrierPortalUrls }) {
   const [query, setQuery] = useState("");
+
+  const allPolicies = (customers || []).flatMap((c) => {
+    const rows = [];
+    if (c.carrier || c.policyNumber) {
+      rows.push({
+        customer: c.name,
+        carrier: c.carrier,
+        type: c.policyType || "Personal Auto",
+        policyNumber: c.policyNumber || "-",
+        office: c.office,
+      });
+    }
+    (c.additionalPolicies || []).forEach((p) => {
+      if (p.carrier || p.policyNumber) {
+        rows.push({
+          customer: c.name,
+          carrier: p.carrier,
+          type: p.policyType || "Policy",
+          policyNumber: p.policyNumber || "-",
+          office: c.office,
+        });
+      }
+    });
+    return rows;
+  });
+
   const filtered = allPolicies.filter((p) => {
     const q = query.trim().toLowerCase();
     if (!q) return true;
-    const policyFieldsMatch = [p.customer, p.carrier, p.type, p.policyNumber, p.office, p.premium]
+    const policyFieldsMatch = [p.customer, p.carrier, p.type, p.policyNumber, p.office]
       .filter(Boolean)
       .some((f) => f.toLowerCase().includes(q));
     const c = customers.find((cu) => cu.name === p.customer);
@@ -894,7 +914,7 @@ function PoliciesListPage({ onOpenCustomer, customers, onPortalOpen, carrierPort
         <table className="w-full text-sm">
           <thead>
             <tr style={{ backgroundColor: COLORS.slate }}>
-              {["Customer", "Company", "Policy Type", "Policy #", "Premium", "Office", ""].map((h) => (
+              {["Customer", "Company", "Policy Type", "Policy #", "Office", ""].map((h) => (
                 <th key={h} className="text-left px-4 py-3 text-white font-bold">{h}</th>
               ))}
             </tr>
@@ -902,7 +922,7 @@ function PoliciesListPage({ onOpenCustomer, customers, onPortalOpen, carrierPort
           <tbody>
             {filtered.map((p, i) => (
               <tr
-                key={p.policyNumber}
+                key={`${p.customer}-${p.policyNumber}-${i}`}
                 onClick={() => {
                   const c = customers.find((cu) => cu.name === p.customer);
                   if (c) onOpenCustomer(c);
@@ -914,7 +934,6 @@ function PoliciesListPage({ onOpenCustomer, customers, onPortalOpen, carrierPort
                 <td className="px-4 py-3" style={{ color: COLORS.charcoal }}>{p.carrier}</td>
                 <td className="px-4 py-3" style={{ color: COLORS.charcoal }}>{p.type}</td>
                 <td className="px-4 py-3" style={{ color: COLORS.charcoal }}>{p.policyNumber}</td>
-                <td className="px-4 py-3" style={{ color: COLORS.charcoal }}>{p.premium}</td>
                 <td className="px-4 py-3" style={{ color: COLORS.charcoal }}>{p.office}</td>
                 <td className="px-4 py-3 text-right whitespace-nowrap">
                   <button
@@ -1092,7 +1111,7 @@ function QuoteDetailPage({ quote, isNew, onBack, onSaveQuote, onAddRequoteToCust
   const [liveTotal, setLiveTotal] = useState(
     quote ? (parseFloat(quote.policyAmount) || 0) + (parseFloat(quote.downPayment) || 0) : 0
   );
-  const [notes, setNotes] = useState(isNew ? [] : sampleQuoteNotes);
+  const [notes, setNotes] = useState(quote?.notes || []);
   const [noteText, setNoteText] = useState("");
   const [duplicateMatch, setDuplicateMatch] = useState(null);
   const [savedMessage, setSavedMessage] = useState("");
@@ -1154,6 +1173,7 @@ function QuoteDetailPage({ quote, isNew, onBack, onSaveQuote, onAddRequoteToCust
       dateQuoted: quote?.dateQuoted || "Today",
       bound: quote?.bound || false,
       existingCustomer,
+      notes,
     };
     if (onSaveQuote) onSaveQuote(record, originalQuoteNumber.current, quote?.id);
     if (existingCustomer && targetCustomerName && onAddRequoteToCustomer) {
@@ -1214,10 +1234,10 @@ function QuoteDetailPage({ quote, isNew, onBack, onSaveQuote, onAddRequoteToCust
 
   const addNote = () => {
     if (!noteText.trim()) return;
-    setNotes((prev) => [
-      { author: employeeName || "Unknown", office: form.office, when: "Just now", text: noteText },
-      ...prev,
-    ]);
+    const newNote = { author: employeeName || "Unknown", office: form.office, when: "Just now", text: noteText };
+    const updated = [newNote, ...notes];
+    setNotes(updated);
+    if (quote?.id && onSaveQuote) onSaveQuote({ notes: updated }, quoteNumber, quote.id);
     setNoteText("");
   };
 
@@ -2637,7 +2657,7 @@ function CustomerProfilePage({ customer, onPortalOpen, employeeName, onDeleteCus
   const [showFlagReasonInput, setShowFlagReasonInput] = useState(false);
   const [flagReasonText, setFlagReasonText] = useState("");
   const [confirmArchiveCustomer, setConfirmArchiveCustomer] = useState(false);
-  const [notes, setNotes] = useState(customer.notes || []);
+  const [notes, setNotes] = useState((customer.notes || []).filter((n) => !n.section || n.section === "overview"));
   const [noteText, setNoteText] = useState("");
   const creatorName = (employees || []).find((e) => e.id === customer.createdBy)?.name || "Unknown";
   const createdAtDisplay = customer.createdAt ? new Date(customer.createdAt).toLocaleString("en-US") : "";
@@ -2650,9 +2670,7 @@ function CustomerProfilePage({ customer, onPortalOpen, employeeName, onDeleteCus
   );
   const [documents, setDocuments] = useState(customer.documents || []);
   const [docCategory, setDocCategory] = useState("Declaration Page");
-  const [quoteNotes, setQuoteNotes] = useState([
-    { author: "Vanessa", office: "Rampart Office", when: "08/03/2026 2:40 PM", text: "Customer asked to compare against National General before deciding - sent both quotes for review." },
-  ]);
+  const [quoteNotes, setQuoteNotes] = useState((customer.notes || []).filter((n) => n.section === "requote"));
   const [quoteNoteText, setQuoteNoteText] = useState("");
 
   useEffect(() => {
@@ -2880,9 +2898,10 @@ function CustomerProfilePage({ customer, onPortalOpen, employeeName, onDeleteCus
 
   const addNote = () => {
     if (!noteText.trim()) return;
-    const updated = [{ author: employeeName || "Unknown", office: customer.office, when: "Just now", text: noteText }, ...notes];
+    const newNote = { author: employeeName || "Unknown", office: customer.office, when: "Just now", text: noteText, section: "overview" };
+    const updated = [newNote, ...notes];
     setNotes(updated);
-    if (onUpdateCustomer) onUpdateCustomer(customer.name, { notes: updated });
+    if (onUpdateCustomer) onUpdateCustomer(customer.name, { notes: [...updated, ...quoteNotes] });
     setActivityLog((prev) => [
       { when: "Just now", employee: employeeName || "Unknown", action: "Note added", detail: noteText },
       ...prev,
@@ -2936,7 +2955,10 @@ function CustomerProfilePage({ customer, onPortalOpen, employeeName, onDeleteCus
 
   const addQuoteNote = () => {
     if (!quoteNoteText.trim()) return;
-    setQuoteNotes((prev) => [{ author: employeeName || "Unknown", office: customer.office, when: "Just now", text: quoteNoteText }, ...prev]);
+    const newNote = { author: employeeName || "Unknown", office: customer.office, when: "Just now", text: quoteNoteText, section: "requote" };
+    const updated = [newNote, ...quoteNotes];
+    setQuoteNotes(updated);
+    if (onUpdateCustomer) onUpdateCustomer(customer.name, { notes: [...notes, ...updated] });
     setActivityLog((prev) => [
       { when: "Just now", employee: employeeName || "Unknown", action: "Note added", detail: `Requote note: ${quoteNoteText}` },
       ...prev,
@@ -3364,6 +3386,7 @@ function CustomerProfilePage({ customer, onPortalOpen, employeeName, onDeleteCus
 
       {selectedPolicyIndex !== null ? (
         <PolicyDetailView
+          key={selectedPolicyIndex}
           policy={(customer.additionalPolicies || [])[selectedPolicyIndex]}
           employeeName={employeeName}
           carrierPortalUrls={carrierPortalUrls}
@@ -4035,18 +4058,21 @@ function TagListEditor({ initialTags }) {
 
 function EmployeesPanel({ employees, setEmployees }) {
   const [showAddEmployee, setShowAddEmployee] = useState(false);
-  const [newEmployee, setNewEmployee] = useState({ name: "", email: "", office: "Rampart Office", role: "Employee" });
-  const [addEmployeeError, setAddEmployeeError] = useState("");
   const [resetSentFor, setResetSentFor] = useState(null);
 
-  const updateRole = (i, role) => {
+  const updateRole = async (i, role) => {
+    const target = employees[i];
+    if (!target) return;
     setEmployees((prev) => prev.map((e, idx) => (idx === i ? { ...e, role } : e)));
+    await updateEmployeeById(target.id, { role });
   };
 
-  const toggleStatus = (i) => {
-    setEmployees((prev) =>
-      prev.map((e, idx) => (idx === i ? { ...e, status: e.status === "Active" ? "Deactivated" : "Active" } : e))
-    );
+  const toggleStatus = async (i) => {
+    const target = employees[i];
+    if (!target) return;
+    const newStatus = target.status === "Active" ? "Deactivated" : "Active";
+    setEmployees((prev) => prev.map((e, idx) => (idx === i ? { ...e, status: newStatus } : e)));
+    await updateEmployeeById(target.id, { status: newStatus });
   };
 
   const resetPassword = async (i) => {
@@ -4059,85 +4085,25 @@ function EmployeesPanel({ employees, setEmployees }) {
     <div>
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-bold" style={{ color: COLORS.charcoal }}>Manage Employees</h2>
-        <button onClick={() => setShowAddEmployee((s) => !s)} className="px-4 py-2 text-white text-sm font-semibold rounded-sm" style={{ backgroundColor: COLORS.blue }}>
-          + Add Employee
+        <button onClick={() => setShowAddEmployee((s) => !s)} className="text-sm font-semibold" style={{ color: COLORS.blue }}>
+          How do I add a new employee?
         </button>
       </div>
       {showAddEmployee && (
         <div className="bg-white border rounded-sm p-5 mb-4" style={{ borderColor: "#D8DCE1" }}>
-          <div className="grid grid-cols-2 gap-4 mb-3">
-            <div>
-              <label className="block text-xs font-semibold mb-1" style={{ color: COLORS.charcoal }}>Name</label>
-              <input
-                type="text"
-                value={newEmployee.name}
-                onChange={(e) => setNewEmployee((prev) => ({ ...prev, name: toTitleCase(e.target.value) }))}
-                className="w-full border rounded-sm px-3 py-2 text-sm outline-none"
-                style={{ borderColor: "#D8DCE1", color: COLORS.charcoal }}
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold mb-1" style={{ color: COLORS.charcoal }}>Email</label>
-              <input
-                type="email"
-                value={newEmployee.email}
-                onChange={(e) => setNewEmployee((prev) => ({ ...prev, email: e.target.value.toLowerCase() }))}
-                className="w-full border rounded-sm px-3 py-2 text-sm outline-none"
-                style={{ borderColor: "#D8DCE1", color: COLORS.charcoal }}
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold mb-1" style={{ color: COLORS.charcoal }}>Office</label>
-              <select
-                value={newEmployee.office}
-                onChange={(e) => setNewEmployee((prev) => ({ ...prev, office: e.target.value }))}
-                className="w-full border rounded-sm px-3 py-2 text-sm outline-none"
-                style={{ borderColor: "#D8DCE1", color: COLORS.charcoal }}
-              >
-                <option>Rampart Office</option>
-                <option>Harwin Office</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-semibold mb-1" style={{ color: COLORS.charcoal }}>Access Level</label>
-              <select
-                value={newEmployee.role}
-                onChange={(e) => setNewEmployee((prev) => ({ ...prev, role: e.target.value }))}
-                className="w-full border rounded-sm px-3 py-2 text-sm outline-none"
-                style={{ borderColor: "#D8DCE1", color: COLORS.charcoal }}
-              >
-                <option>Employee</option>
-                <option>Admin</option>
-              </select>
-            </div>
-          </div>
-          {addEmployeeError && (
-            <p className="text-xs font-semibold mb-2" style={{ color: COLORS.red }}>{addEmployeeError}</p>
-          )}
-          <p className="text-xs mb-3" style={{ color: COLORS.slate }}>
-            This adds them to this list. A real login still needs to be created for them in Supabase Authentication.
+          <p className="text-sm font-semibold mb-2" style={{ color: COLORS.charcoal }}>
+            Adding a new employee takes two steps in Supabase (this page can only edit people who already have a login):
           </p>
-          <div className="flex gap-3">
-            <button
-              onClick={() => {
-                if (isBlank(newEmployee.name) || isBlank(newEmployee.email)) {
-                  setAddEmployeeError("Name and email are required.");
-                  return;
-                }
-                setEmployees((prev) => [...prev, { ...newEmployee, status: "Active" }]);
-                setNewEmployee({ name: "", email: "", office: "Rampart Office", role: "Employee" });
-                setAddEmployeeError("");
-                setShowAddEmployee(false);
-              }}
-              className="px-4 py-2 text-white text-sm font-semibold rounded-sm"
-              style={{ backgroundColor: COLORS.blue }}
-            >
-              Save Employee
-            </button>
-            <button onClick={() => setShowAddEmployee(false)} className="text-sm font-semibold" style={{ color: COLORS.slate }}>
-              Cancel
-            </button>
-          </div>
+          <ol className="text-sm list-decimal list-inside space-y-1 mb-3" style={{ color: COLORS.charcoal }}>
+            <li>Supabase &rarr; Authentication &rarr; Users &rarr; Add user (their real email + a temporary password)</li>
+            <li>Supabase &rarr; Table Editor &rarr; employees &rarr; Insert row (paste their new user ID, name, office, and role)</li>
+          </ol>
+          <p className="text-xs mb-3" style={{ color: COLORS.slate }}>
+            This is a one-time security step - creating logins requires access this app intentionally doesn't have client-side. Once they're in the employees table, they'll show up below and you can manage their role/office/status right here.
+          </p>
+          <button onClick={() => setShowAddEmployee(false)} className="text-sm font-semibold" style={{ color: COLORS.slate }}>
+            Close
+          </button>
         </div>
       )}
       <div className="bg-white border rounded-sm overflow-hidden" style={{ borderColor: "#D8DCE1" }}>
@@ -4572,17 +4538,25 @@ function SystemSettingsPanel() {
 function AdminPage({ customers, employees, setEmployees, carriers, setCarriers }) {
   const [section, setSection] = useState("Employees");
 
-  const addCarrier = (name) => {
+  const addCarrier = async (name) => {
     if (!name.trim()) return;
-    setCarriers((prev) => [...prev, { name: toTitleCase(name.trim()), portalUrl: "" }]);
+    const saved = await insertCarrier(toTitleCase(name.trim()));
+    if (saved) setCarriers((prev) => [...prev, saved]);
   };
 
-  const updateCarrierUrl = (i, url) => {
+  const updateCarrierUrl = async (i, url) => {
+    const target = carriers[i];
+    if (!target) return;
     setCarriers((prev) => prev.map((c, idx) => (idx === i ? { ...c, portalUrl: url } : c)));
+    const saved = await updateCarrierById(target.id, url);
+    if (saved) setCarriers((prev) => prev.map((c) => (c.id === saved.id ? saved : c)));
   };
 
-  const removeCarrier = (i) => {
-    setCarriers((prev) => prev.filter((_, idx) => idx !== i));
+  const removeCarrier = async (i) => {
+    const target = carriers[i];
+    if (!target) return;
+    const ok = await deleteCarrierById(target.id);
+    if (ok) setCarriers((prev) => prev.filter((_, idx) => idx !== i));
   };
 
   return (
@@ -4810,8 +4784,8 @@ export default function App() {
   const [quotes, setQuotes] = useState([]);
   const [quotesLoading, setQuotesLoading] = useState(true);
   const [activeCustomerNames, setActiveCustomerNames] = useState(new Set());
-  const [employees, setEmployees] = useState(initialEmployees);
-  const [carriers, setCarriers] = useState(initialCarriers);
+  const [employees, setEmployees] = useState([]);
+  const [carriers, setCarriers] = useState([]);
   const carrierPortalUrls = Object.fromEntries(carriers.map((c) => [c.name, c.portalUrl]));
 
   useEffect(() => {
@@ -4826,6 +4800,8 @@ export default function App() {
       setQuotes(data);
       setQuotesLoading(false);
     });
+    fetchCarriers().then(setCarriers);
+    fetchEmployees().then(setEmployees);
   }, [authStep]);
 
   const updateCustomerRecord = async (customerName, patch) => {
