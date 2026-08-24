@@ -2205,7 +2205,7 @@ function PolicyDetailView({ policy, employeeName, carrierPortalUrls, customerId,
     let updatedActivity = activityLog;
 
     if (carrierOrNumberChanged) {
-      const historyEntry = { when: "Just now", carrier, policyNumber, reason: "Updated policy info" };
+      const historyEntry = { when: "Just now", carrier, policyNumber, effectiveDate, expiryDate, reason: "Updated policy info" };
       updatedHistory = [historyEntry, ...policyHistoryLog];
       setPolicyHistoryLog(updatedHistory);
       const activityEntry = { when: "Just now", employee: employeeName || "Unknown", action: "Edited policy info", detail: `${carrier} - Policy #${policyNumber || "pending"}` };
@@ -2557,7 +2557,7 @@ function PolicyDetailView({ policy, employeeName, carrierPortalUrls, customerId,
           <table className="w-full text-sm">
             <thead>
               <tr style={{ backgroundColor: COLORS.slate }}>
-                {["Date", "Company", "Policy Number", "Reason"].map((h) => (
+                {["Date", "Company", "Policy Number", "Effective Date", "Expiry Date", "Reason"].map((h) => (
                   <th key={h} className="text-left px-4 py-3 text-white font-bold">{h}</th>
                 ))}
               </tr>
@@ -2568,6 +2568,8 @@ function PolicyDetailView({ policy, employeeName, carrierPortalUrls, customerId,
                   <td className="px-4 py-3" style={{ color: COLORS.charcoal }}>{h.when}</td>
                   <td className="px-4 py-3" style={{ color: COLORS.charcoal }}>{h.carrier}</td>
                   <td className="px-4 py-3" style={{ color: COLORS.charcoal }}>{h.policyNumber}</td>
+                  <td className="px-4 py-3" style={{ color: COLORS.charcoal }}>{h.effectiveDate || "-"}</td>
+                  <td className="px-4 py-3" style={{ color: COLORS.charcoal }}>{h.expiryDate || "-"}</td>
                   <td className="px-4 py-3" style={{ color: COLORS.charcoal }}>{h.reason}</td>
                 </tr>
               ))}
@@ -2924,6 +2926,8 @@ function CustomerProfilePage({ customer, onPortalOpen, employeeName, onDeleteCus
         carrier: manualCarrier,
         policyNumber: manualPolicyNumber,
         type: manualPolicyType,
+        effectiveDate: manualEffectiveDate,
+        expiryDate: manualExpiryDate,
         reason: "Manually updated - not tied to a requote",
       },
     ]);
@@ -3874,7 +3878,7 @@ function CustomerProfilePage({ customer, onPortalOpen, employeeName, onDeleteCus
             <table className="w-full text-sm">
               <thead>
                 <tr style={{ backgroundColor: COLORS.slate }}>
-                  {["Carrier", "Policy Type", "Policy #", "Start Date", "End Date", "Reason"].map((h) => (
+                  {["Carrier", "Policy Type", "Policy #", "Effective Date", "Expiry Date", "Start Date", "End Date", "Reason"].map((h) => (
                     <th key={h} className="text-left px-4 py-3 text-white font-bold">{h}</th>
                   ))}
                 </tr>
@@ -3885,6 +3889,8 @@ function CustomerProfilePage({ customer, onPortalOpen, employeeName, onDeleteCus
                     <td className="px-4 py-3 font-medium" style={{ color: COLORS.charcoal }}>{p.carrier}</td>
                     <td className="px-4 py-3" style={{ color: COLORS.charcoal }}>{p.type}</td>
                     <td className="px-4 py-3" style={{ color: COLORS.charcoal }}>{p.policyNumber}</td>
+                    <td className="px-4 py-3" style={{ color: COLORS.charcoal }}>{p.effectiveDate || "-"}</td>
+                    <td className="px-4 py-3" style={{ color: COLORS.charcoal }}>{p.expiryDate || "-"}</td>
                     <td className="px-4 py-3" style={{ color: COLORS.charcoal }}>{p.startDate}</td>
                     <td className="px-4 py-3" style={{ color: COLORS.charcoal }}>
                       {p.endDate === "Present" ? (
