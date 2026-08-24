@@ -2215,8 +2215,16 @@ function PolicyDetailView({ policy, employeeName, carrierPortalUrls, customerId,
 
   const openDocument = async (doc) => {
     if (!doc.path) return;
+    // Open the tab immediately (synchronously, tied to the click) so browsers
+    // don't treat it as a blocked popup once we await the network request below.
+    const newTab = window.open("", "_blank");
     const url = await getDocumentUrl(doc.path);
-    if (url) window.open(url, "_blank");
+    if (url && newTab) {
+      newTab.location.href = url;
+    } else if (newTab) {
+      newTab.close();
+      alert("Couldn't open that document. It may have been removed, or there's a permissions issue with the storage bucket.");
+    }
   };
 
   const saveManualRequote = () => {
@@ -2914,8 +2922,16 @@ function CustomerProfilePage({ customer, onPortalOpen, employeeName, onDeleteCus
 
   const openDocument = async (doc) => {
     if (!doc.path) return;
+    // Open the tab immediately (synchronously, tied to the click) so browsers
+    // don't treat it as a blocked popup once we await the network request below.
+    const newTab = window.open("", "_blank");
     const url = await getDocumentUrl(doc.path);
-    if (url) window.open(url, "_blank");
+    if (url && newTab) {
+      newTab.location.href = url;
+    } else if (newTab) {
+      newTab.close();
+      alert("Couldn't open that document. It may have been removed, or there's a permissions issue with the storage bucket.");
+    }
   };
 
   const addQuoteNote = () => {
