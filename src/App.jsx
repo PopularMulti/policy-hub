@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { Search, Lock } from "lucide-react";
 import { supabase } from "./supabaseClient";
+import { fetchCustomers, insertCustomer, updateCustomerById, deleteCustomerById } from "./customerData";
+import { fetchQuotes, insertQuote, updateQuoteById, deleteQuoteById } from "./quoteData";
 
 const COLORS = {
   blue: "#1768A5",
@@ -568,7 +570,7 @@ function AddCustomerPage({ onBack, customers, onAddCustomer, onOpenCustomer, def
     downPayment,
   });
 
-  const saveCustomer = () => {
+  const saveCustomer = async () => {
     setSavedMessage("");
     const missing = [];
     if (isBlank(nameForm.firstName)) missing.push("First Name");
@@ -589,18 +591,18 @@ function AddCustomerPage({ onBack, customers, onAddCustomer, onOpenCustomer, def
     } else {
       setDuplicateMatch(null);
       const record = buildCustomerRecord();
-      const saved = onAddCustomer ? onAddCustomer(record) : record;
+      const saved = onAddCustomer ? await onAddCustomer(record) : record;
       if (onOpenCustomer) onOpenCustomer(saved || record);
     }
   };
 
-  const resolveDuplicate = (choice) => {
+  const resolveDuplicate = async (choice) => {
     setDuplicateMatch(null);
     if (choice === "merge") {
       if (onOpenCustomer) onOpenCustomer(duplicateMatch);
     } else {
       const record = buildCustomerRecord();
-      const saved = onAddCustomer ? onAddCustomer(record) : record;
+      const saved = onAddCustomer ? await onAddCustomer(record) : record;
       if (onOpenCustomer) onOpenCustomer(saved || record);
     }
   };
@@ -1152,7 +1154,7 @@ function QuoteDetailPage({ quote, isNew, onBack, onSaveQuote, onAddRequoteToCust
       bound: quote?.bound || false,
       existingCustomer,
     };
-    if (onSaveQuote) onSaveQuote(record, originalQuoteNumber.current);
+    if (onSaveQuote) onSaveQuote(record, originalQuoteNumber.current, quote?.id);
     if (existingCustomer && targetCustomerName && onAddRequoteToCustomer) {
       onAddRequoteToCustomer(targetCustomerName, {
         driverName,
@@ -2598,7 +2600,7 @@ function PolicyDetailView({ policy, employeeName, carrierPortalUrls, onSave, onR
     </div>
   );
 }
-function CustomerProfilePage({ customer, requotes, onRequotesChange, onPortalOpen, employeeName, onActivityChange, onDeleteCustomer, onUpdateCustomer, carrierPortalUrls }) {
+function CustomerProfilePage({ customer, requotes, onRequotesChange, onPortalOpen, employeeName, onActivityChange, onDeleteCustomer, onUpdateCustomer, carrierPortalUrls, employees }) {
   const [tab, setTab] = useState("Overview");
   const [selectedPolicyIndex, setSelectedPolicyIndex] = useState(null);
   const [confirmDeleteCustomer, setConfirmDeleteCustomer] = useState(false);
@@ -2607,13 +2609,12 @@ function CustomerProfilePage({ customer, requotes, onRequotesChange, onPortalOpe
   const [confirmArchiveCustomer, setConfirmArchiveCustomer] = useState(false);
   const [notes, setNotes] = useState(customer.notes || []);
   const [noteText, setNoteText] = useState("");
+  const creatorName = (employees || []).find((e) => e.id === customer.createdBy)?.name || "Unknown";
+  const createdAtDisplay = customer.createdAt ? new Date(customer.createdAt).toLocaleString("en-US") : "";
   const [activityLog, setActivityLog] = useState([
     ...(customer.createdBy
-      ? [{ when: customer.createdAt || "Just now", employee: customer.createdBy, action: "Customer profile created", detail: `Added ${customer.name}` }]
+      ? [{ when: createdAtDisplay || "Unknown", employee: creatorName, action: "Customer profile created", detail: `Added ${customer.name}` }]
       : []),
-    { when: "08/09/2026 2:14 PM", employee: "Dulce", action: "Searched", detail: `Policy #${policies[0].policyNumber} (${policies[0].carrier})` },
-    { when: "08/08/2026 11:02 AM", employee: "Vanessa", action: "Searched", detail: `Policy #${policies[1].policyNumber} (${policies[1].carrier})` },
-    { when: "08/07/2026 4:47 PM", employee: "Vanessa", action: "Opened to carrier portal", detail: `Policy #${policies[0].policyNumber} (${policies[0].carrier})` },
   ]);
   const [documents, setDocuments] = useState(customer.documents || []);
   const [docCategory, setDocCategory] = useState("Declaration Page");
@@ -4735,13 +4736,15 @@ export default function App() {
   const [employeeName, setEmployeeName] = useState("");
   const [employeeProfile, setEmployeeProfile] = useState(null);
   const [page, setPage] = useState("Dashboard");
-  const [customers, setCustomers] = useState(initialCustomers);
-  const [selectedCustomerName, setSelectedCustomerName] = useState(initialCustomers[0].name);
-  const selectedCustomer = customers.find((c) => c.name === selectedCustomerName) || customers[0];
+  const [customers, setCustomers] = useState([]);
+  const [customersLoading, setCustomersLoading] = useState(true);
+  const [selectedCustomerName, setSelectedCustomerName] = useState(null);
+  const selectedCustomer = customers.find((c) => c.name === selectedCustomerName) || null;
   const [selectedQuote, setSelectedQuote] = useState(null);
   const [isNewQuote, setIsNewQuote] = useState(false);
   const [adminUnlocked, setAdminUnlocked] = useState(false);
-  const [quotes, setQuotes] = useState(initialQuotes);
+  const [quotes, setQuotes] = useState([]);
+  const [quotesLoading, setQuotesLoading] = useState(true);
   const [requoteHistoryByCustomer, setRequoteHistoryByCustomer] = useState({
     "Maria Rodriguez": customerQuoteHistory,
   });
@@ -4751,12 +4754,33 @@ export default function App() {
   const carrierPortalUrls = Object.fromEntries(carriers.map((c) => [c.name, c.portalUrl]));
   const [activityLogByCustomer, setActivityLogByCustomer] = useState({});
 
+  useEffect(() => {
+    if (authStep !== "app") return;
+    setCustomersLoading(true);
+    fetchCustomers().then((data) => {
+      setCustomers(data);
+      setCustomersLoading(false);
+    });
+    setQuotesLoading(true);
+    fetchQuotes().then((data) => {
+      setQuotes(data);
+      setQuotesLoading(false);
+    });
+  }, [authStep]);
+
   const updateCustomerActivity = (customerName, entries) => {
     setActivityLogByCustomer((prev) => ({ ...prev, [customerName]: entries }));
   };
 
-  const updateCustomerRecord = (customerName, patch) => {
-    setCustomers((prev) => prev.map((c) => (c.name === customerName ? { ...c, ...patch } : c)));
+  const updateCustomerRecord = async (customerName, patch) => {
+    const target = customers.find((c) => c.name === customerName);
+    if (!target) return;
+    // Optimistic local update so the UI feels instant
+    setCustomers((prev) => prev.map((c) => (c.id === target.id ? { ...c, ...patch } : c)));
+    const saved = await updateCustomerById(target.id, patch);
+    if (saved) {
+      setCustomers((prev) => prev.map((c) => (c.id === saved.id ? saved : c)));
+    }
   };
 
   const markCustomerActive = (name) => {
@@ -4786,16 +4810,16 @@ export default function App() {
     setPage("QuoteDetail");
   };
 
-  const saveQuoteRecord = (record, originalQuoteNumber) => {
-    setQuotes((prev) => {
-      const existingIndex = prev.findIndex((q) => q.quoteNumber === originalQuoteNumber);
-      if (existingIndex !== -1) {
-        const updated = [...prev];
-        updated[existingIndex] = record;
-        return updated;
-      }
-      return [record, ...prev];
-    });
+  const saveQuoteRecord = async (record, originalQuoteNumber, quoteId) => {
+    if (quoteId) {
+      const saved = await updateQuoteById(quoteId, record);
+      if (saved) setQuotes((prev) => prev.map((q) => (q.id === quoteId ? saved : q)));
+      return saved;
+    }
+    const withCreator = { ...record, createdBy: employeeProfile?.id || null };
+    const saved = await insertQuote(withCreator);
+    if (saved) setQuotes((prev) => [saved, ...prev]);
+    return saved;
   };
 
   const addRequoteToCustomer = (customerName, record) => {
@@ -4810,15 +4834,19 @@ export default function App() {
     setRequoteHistoryByCustomer((prev) => ({ ...prev, [customerName]: list }));
   };
 
-  const addCustomer = (record) => {
-    const stamped = { ...record, createdBy: record.createdBy || employeeName, createdAt: record.createdAt || "Just now" };
-    setCustomers((prev) => [...prev, stamped]);
-    markCustomerActive(stamped.name);
-    return stamped;
+  const addCustomer = async (record) => {
+    const withCreator = { ...record, createdBy: employeeProfile?.id || null };
+    const saved = await insertCustomer(withCreator);
+    if (!saved) return null;
+    setCustomers((prev) => [...prev, saved]);
+    markCustomerActive(saved.name);
+    return saved;
   };
 
-  const deleteCustomer = (customer) => {
-    setCustomers((prev) => prev.filter((c) => c.name !== customer.name));
+  const deleteCustomer = async (customer) => {
+    const ok = await deleteCustomerById(customer.id);
+    if (!ok) return;
+    setCustomers((prev) => prev.filter((c) => c.id !== customer.id));
     setActivityLogByCustomer((prev) => {
       const next = { ...prev };
       delete next[customer.name];
@@ -4832,15 +4860,17 @@ export default function App() {
     setPage("CustomersList");
   };
 
-  const deleteQuote = (quote) => {
-    setQuotes((prev) => prev.filter((q) => q.quoteNumber !== quote.quoteNumber));
+  const deleteQuote = async (quote) => {
+    const ok = await deleteQuoteById(quote.id);
+    if (!ok) return;
+    setQuotes((prev) => prev.filter((q) => q.id !== quote.id));
     setPage("QuotesList");
   };
 
-  const acceptQuote = (quote) => {
+  const acceptQuote = async (quote) => {
     let targetCustomer = findDuplicateCustomer(customers, quote.driverName, quote.phone);
     if (!targetCustomer) {
-      targetCustomer = {
+      const newCustomerData = {
         name: quote.driverName,
         phone: quote.phone || "",
         email: quote.email || "",
@@ -4861,9 +4891,11 @@ export default function App() {
         policyAmount: quote.policyAmount || "",
         downPayment: quote.downPayment || "",
       };
-      targetCustomer = addCustomer(targetCustomer);
+      targetCustomer = await addCustomer(newCustomerData);
+      if (!targetCustomer) return;
     }
     markCustomerActive(targetCustomer.name);
+    if (quote.id) await deleteQuoteById(quote.id);
     setQuotes((prev) => prev.filter((q) => q.quoteNumber !== quote.quoteNumber));
     openCustomer(targetCustomer);
   };
@@ -4910,6 +4942,12 @@ export default function App() {
           setAuthStep("login");
         }}
       />
+      {customersLoading && (page === "Dashboard" || page === "CustomersList") && (
+        <p className="text-center text-sm py-3" style={{ color: COLORS.slate }}>Loading customers...</p>
+      )}
+      {quotesLoading && (page === "Dashboard" || page === "QuotesList") && (
+        <p className="text-center text-sm py-3" style={{ color: COLORS.slate }}>Loading quotes...</p>
+      )}
       {page === "Dashboard" && (
         <DashboardPage
           onOpenCustomer={openCustomer}
@@ -4942,7 +4980,7 @@ export default function App() {
           carrierPortalUrls={carrierPortalUrls}
         />
       )}
-      {page === "Customer" && (
+      {page === "Customer" && selectedCustomer && (
         <CustomerProfilePage
           customer={selectedCustomer}
           requotes={requoteHistoryByCustomer[selectedCustomer.name] || []}
@@ -4953,6 +4991,7 @@ export default function App() {
           onDeleteCustomer={deleteCustomer}
           onUpdateCustomer={updateCustomerRecord}
           carrierPortalUrls={carrierPortalUrls}
+          employees={employees}
         />
       )}
       {page === "QuotesList" && (
