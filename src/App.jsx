@@ -21,6 +21,49 @@ const FULL_LOGO_SRC = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAABwgAAAHCCAY
 
 const NAV_ITEMS = ["Dashboard", "Customers", "Quotes", "Policies", "Admin"];
 const TABS = ["Overview", "Requote", "Policy History", "Documents", "Activity"];
+const POLICY_TYPES = ["Personal Auto", "Commercial Auto", "General Liability", "Homeowners", "Renters", "Motorcycle", "Other"];
+
+function SortableHeader({ label, field, sortField, sortDir, onSort }) {
+  const active = sortField === field;
+  return (
+    <th
+      onClick={() => onSort(field)}
+      className="text-left px-4 py-3 text-white font-bold cursor-pointer select-none whitespace-nowrap"
+    >
+      {label} {active ? (sortDir === "asc" ? "\u25b2" : "\u25bc") : ""}
+    </th>
+  );
+}
+
+function useSortableList(items, defaultField, getValue, defaultDir = "asc") {
+  const [sortField, setSortField] = useState(defaultField || null);
+  const [sortDir, setSortDir] = useState(defaultDir);
+
+  const onSort = (field) => {
+    if (sortField === field) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortField(field);
+      setSortDir("asc");
+    }
+  };
+
+  const sorted = [...items].sort((a, b) => {
+    if (!sortField) return 0;
+    const av = getValue(a, sortField);
+    const bv = getValue(b, sortField);
+    if (typeof av === "number" && typeof bv === "number") {
+      return sortDir === "asc" ? av - bv : bv - av;
+    }
+    const as = (av || "").toString().toLowerCase();
+    const bs = (bv || "").toString().toLowerCase();
+    if (as < bs) return sortDir === "asc" ? -1 : 1;
+    if (as > bs) return sortDir === "asc" ? 1 : -1;
+    return 0;
+  });
+
+  return { sorted, sortField, sortDir, onSort };
+}
 
 const initialCustomers = [
   {
@@ -865,9 +908,21 @@ function AddCustomerPage({ onBack, customers, onAddCustomer, onOpenCustomer, def
 function CustomersListPage({ onOpenCustomer, onAddNewCustomer, customers, onPortalOpen, carrierPortalUrls }) {
   const [query, setQuery] = useState("");
   const [showArchived, setShowArchived] = useState(false);
+  const [typeFilter, setTypeFilter] = useState("All");
   const visibleCustomers = showArchived ? customers : customers.filter((c) => !c.archived);
-  const filtered = visibleCustomers.filter((c) => customerMatchesQuery(c, query));
+  const customerHasType = (c, type) =>
+    (c.policyType || "Personal Auto") === type || (c.additionalPolicies || []).some((p) => p.policyType === type);
+  const filtered = visibleCustomers
+    .filter((c) => customerMatchesQuery(c, query))
+    .filter((c) => typeFilter === "All" || customerHasType(c, typeFilter));
   const archivedCount = customers.filter((c) => c.archived).length;
+
+  const getSortValue = (c, field) => {
+    if (field === "address") return formatAddress(c);
+    if (field === "carrier") return c.carrier;
+    return c[field];
+  };
+  const { sorted, sortField, sortDir, onSort } = useSortableList(filtered, "name", getSortValue);
 
   return (
     <div className="max-w-6xl mx-auto px-6 py-8">
@@ -877,16 +932,29 @@ function CustomersListPage({ onOpenCustomer, onAddNewCustomer, customers, onPort
           + Add New Customer
         </button>
       </div>
-      <div className="bg-white border rounded-sm p-3 mb-4 flex items-center gap-2" style={{ borderColor: "#D8DCE1", borderLeft: `4px solid ${COLORS.slate}` }}>
-        <Search size={16} color={COLORS.slate} />
-        <input
-          type="text"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search by name, spouse/relative, address, phone, policy #, or company"
-          className="w-full outline-none text-sm"
-          style={{ color: COLORS.charcoal }}
-        />
+      <div className="flex gap-3 mb-4">
+        <div className="bg-white border rounded-sm p-3 flex items-center gap-2 flex-1" style={{ borderColor: "#D8DCE1", borderLeft: `4px solid ${COLORS.slate}` }}>
+          <Search size={16} color={COLORS.slate} />
+          <input
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search by name, spouse/relative, address, phone, policy #, or company"
+            className="w-full outline-none text-sm"
+            style={{ color: COLORS.charcoal }}
+          />
+        </div>
+        <select
+          value={typeFilter}
+          onChange={(e) => setTypeFilter(e.target.value)}
+          className="border rounded-sm px-3 text-sm outline-none"
+          style={{ borderColor: "#D8DCE1", color: COLORS.charcoal }}
+        >
+          <option>All</option>
+          {POLICY_TYPES.map((t) => (
+            <option key={t}>{t}</option>
+          ))}
+        </select>
       </div>
       {archivedCount > 0 && (
         <button
@@ -901,13 +969,17 @@ function CustomersListPage({ onOpenCustomer, onAddNewCustomer, customers, onPort
         <table className="w-full text-sm">
           <thead>
             <tr style={{ backgroundColor: COLORS.slate }}>
-              {["Name", "Phone", "Address", "Office", "Current Company", "Policy Number", ""].map((h) => (
-                <th key={h} className="text-left px-4 py-3 text-white font-bold">{h}</th>
-              ))}
+              <SortableHeader label="Name" field="name" sortField={sortField} sortDir={sortDir} onSort={onSort} />
+              <SortableHeader label="Phone" field="phone" sortField={sortField} sortDir={sortDir} onSort={onSort} />
+              <SortableHeader label="Address" field="address" sortField={sortField} sortDir={sortDir} onSort={onSort} />
+              <SortableHeader label="Office" field="office" sortField={sortField} sortDir={sortDir} onSort={onSort} />
+              <SortableHeader label="Current Company" field="carrier" sortField={sortField} sortDir={sortDir} onSort={onSort} />
+              <SortableHeader label="Policy Number" field="policyNumber" sortField={sortField} sortDir={sortDir} onSort={onSort} />
+              <th className="text-left px-4 py-3 text-white font-bold"></th>
             </tr>
           </thead>
           <tbody>
-            {filtered.map((c, i) => (
+            {sorted.map((c, i) => (
               <tr
                 key={c.name}
                 onClick={() => onOpenCustomer(c)}
@@ -948,6 +1020,7 @@ function CustomersListPage({ onOpenCustomer, onAddNewCustomer, customers, onPort
 
 function PoliciesListPage({ onOpenCustomer, customers, onPortalOpen, carrierPortalUrls }) {
   const [query, setQuery] = useState("");
+  const [typeFilter, setTypeFilter] = useState("All");
 
   const allPolicies = (customers || []).flatMap((c) => {
     const rows = [];
@@ -975,6 +1048,7 @@ function PoliciesListPage({ onOpenCustomer, customers, onPortalOpen, carrierPort
   });
 
   const filtered = allPolicies.filter((p) => {
+    if (typeFilter !== "All" && p.type !== typeFilter) return false;
     const q = query.trim().toLowerCase();
     if (!q) return true;
     const policyFieldsMatch = [p.customer, p.carrier, p.type, p.policyNumber, p.office]
@@ -984,31 +1058,49 @@ function PoliciesListPage({ onOpenCustomer, customers, onPortalOpen, carrierPort
     return policyFieldsMatch || (c && customerMatchesQuery(c, query));
   });
 
+  const { sorted, sortField, sortDir, onSort } = useSortableList(filtered, "customer", (p, field) => p[field]);
+
   return (
     <div className="max-w-6xl mx-auto px-6 py-8">
       <h1 className="text-xl font-bold mb-4" style={{ color: COLORS.charcoal }}>Policies</h1>
-      <div className="bg-white border rounded-sm p-3 mb-4 flex items-center gap-2" style={{ borderColor: "#D8DCE1", borderLeft: `4px solid ${COLORS.slate}` }}>
-        <Search size={16} color={COLORS.slate} />
-        <input
-          type="text"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search by customer, spouse/relative, address, company, or policy #"
-          className="w-full outline-none text-sm"
-          style={{ color: COLORS.charcoal }}
-        />
+      <div className="flex gap-3 mb-4">
+        <div className="bg-white border rounded-sm p-3 flex items-center gap-2 flex-1" style={{ borderColor: "#D8DCE1", borderLeft: `4px solid ${COLORS.slate}` }}>
+          <Search size={16} color={COLORS.slate} />
+          <input
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search by customer, spouse/relative, address, company, or policy #"
+            className="w-full outline-none text-sm"
+            style={{ color: COLORS.charcoal }}
+          />
+        </div>
+        <select
+          value={typeFilter}
+          onChange={(e) => setTypeFilter(e.target.value)}
+          className="border rounded-sm px-3 text-sm outline-none"
+          style={{ borderColor: "#D8DCE1", color: COLORS.charcoal }}
+        >
+          <option>All</option>
+          {POLICY_TYPES.map((t) => (
+            <option key={t}>{t}</option>
+          ))}
+        </select>
       </div>
       <div className="bg-white border rounded-sm overflow-hidden" style={{ borderColor: "#D8DCE1" }}>
         <table className="w-full text-sm">
           <thead>
             <tr style={{ backgroundColor: COLORS.slate }}>
-              {["Customer", "Company", "Policy Type", "Policy #", "Office", ""].map((h) => (
-                <th key={h} className="text-left px-4 py-3 text-white font-bold">{h}</th>
-              ))}
+              <SortableHeader label="Customer" field="customer" sortField={sortField} sortDir={sortDir} onSort={onSort} />
+              <SortableHeader label="Company" field="carrier" sortField={sortField} sortDir={sortDir} onSort={onSort} />
+              <SortableHeader label="Policy Type" field="type" sortField={sortField} sortDir={sortDir} onSort={onSort} />
+              <SortableHeader label="Policy #" field="policyNumber" sortField={sortField} sortDir={sortDir} onSort={onSort} />
+              <SortableHeader label="Office" field="office" sortField={sortField} sortDir={sortDir} onSort={onSort} />
+              <th className="text-left px-4 py-3 text-white font-bold"></th>
             </tr>
           </thead>
           <tbody>
-            {filtered.map((p, i) => (
+            {sorted.map((p, i) => (
               <tr
                 key={`${p.customer}-${p.policyNumber}-${i}`}
                 onClick={() => {
@@ -1051,10 +1143,11 @@ function PoliciesListPage({ onOpenCustomer, customers, onPortalOpen, carrierPort
 
 function QuotesListPage({ onOpenQuote, onAddNewQuote, quotes, onAcceptQuote, onPortalOpen, carrierPortalUrls }) {
   const [query, setQuery] = useState("");
-  const [dateSort, setDateSort] = useState("desc");
+  const [typeFilter, setTypeFilter] = useState("All");
 
-  const filtered = sortByDate(
-    quotes.filter((q) => {
+  const preFiltered = quotes
+    .filter((q) => typeFilter === "All" || (q.policyType || "Personal Auto") === typeFilter)
+    .filter((q) => {
       const t = query.trim().toLowerCase();
       if (!t) return true;
       const tDigits = t.replace(/\D/g, "");
@@ -1063,9 +1156,14 @@ function QuotesListPage({ onOpenQuote, onAddNewQuote, quotes, onAcceptQuote, onP
         .some((f) => f.toLowerCase().includes(t));
       const phoneMatch = tDigits.length >= 3 && (q.phone || "").replace(/\D/g, "").includes(tDigits);
       return fieldsMatch || phoneMatch;
-    }),
-    dateSort
-  );
+    });
+
+  const getSortValue = (q, field) => {
+    if (field === "dateQuoted") return parseQuoteDate(q.dateQuoted).getTime();
+    if (field === "payment") return (parseFloat(q.policyAmount) || 0) + (parseFloat(q.downPayment) || 0);
+    return q[field];
+  };
+  const { sorted: filtered, sortField, sortDir, onSort } = useSortableList(preFiltered, "dateQuoted", getSortValue, "desc");
 
   const handleAccept = (e, quote) => {
     e.stopPropagation();
@@ -1085,34 +1183,42 @@ function QuotesListPage({ onOpenQuote, onAddNewQuote, quotes, onAcceptQuote, onP
         </button>
       </div>
 
-      <div className="bg-white border rounded-sm p-3 mb-4 flex items-center gap-2" style={{ borderColor: "#D8DCE1", borderLeft: `4px solid ${COLORS.slate}` }}>
-        <Search size={16} color={COLORS.slate} />
-        <input
-          type="text"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search by driver, phone, company, office, or quote #"
-          className="w-full outline-none text-sm"
-          style={{ color: COLORS.charcoal }}
-        />
+      <div className="flex gap-3 mb-4">
+        <div className="bg-white border rounded-sm p-3 flex items-center gap-2 flex-1" style={{ borderColor: "#D8DCE1", borderLeft: `4px solid ${COLORS.slate}` }}>
+          <Search size={16} color={COLORS.slate} />
+          <input
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search by driver, phone, company, office, or quote #"
+            className="w-full outline-none text-sm"
+            style={{ color: COLORS.charcoal }}
+          />
+        </div>
+        <select
+          value={typeFilter}
+          onChange={(e) => setTypeFilter(e.target.value)}
+          className="border rounded-sm px-3 text-sm outline-none"
+          style={{ borderColor: "#D8DCE1", color: COLORS.charcoal }}
+        >
+          <option>All</option>
+          {POLICY_TYPES.map((t) => (
+            <option key={t}>{t}</option>
+          ))}
+        </select>
       </div>
       <div className="bg-white border rounded-sm overflow-hidden" style={{ borderColor: "#D8DCE1" }}>
         <table className="w-full text-sm">
           <thead>
             <tr style={{ backgroundColor: COLORS.slate }}>
-              {["Driver", "Phone", "Company Quoted", "Quote #", "Office", "Payment", "", ""].map((h, idx) =>
-                idx === 6 ? (
-                  <th
-                    key="dateHeader"
-                    onClick={() => setDateSort((s) => (s === "desc" ? "asc" : "desc"))}
-                    className="text-left px-4 py-3 text-white font-bold cursor-pointer select-none whitespace-nowrap"
-                  >
-                    Date Quoted {dateSort === "desc" ? "\u25bc" : "\u25b2"}
-                  </th>
-                ) : (
-                  <th key={h + idx} className="text-left px-4 py-3 text-white font-bold">{h}</th>
-                )
-              )}
+              <SortableHeader label="Driver" field="driverName" sortField={sortField} sortDir={sortDir} onSort={onSort} />
+              <SortableHeader label="Phone" field="phone" sortField={sortField} sortDir={sortDir} onSort={onSort} />
+              <SortableHeader label="Company Quoted" field="carrier" sortField={sortField} sortDir={sortDir} onSort={onSort} />
+              <SortableHeader label="Quote #" field="quoteNumber" sortField={sortField} sortDir={sortDir} onSort={onSort} />
+              <SortableHeader label="Office" field="office" sortField={sortField} sortDir={sortDir} onSort={onSort} />
+              <SortableHeader label="Payment" field="payment" sortField={sortField} sortDir={sortDir} onSort={onSort} />
+              <SortableHeader label="Date Quoted" field="dateQuoted" sortField={sortField} sortDir={sortDir} onSort={onSort} />
+              <th className="text-left px-4 py-3 text-white font-bold"></th>
             </tr>
           </thead>
           <tbody>
@@ -3021,6 +3127,18 @@ function CustomerProfilePage({ customer, onPortalOpen, employeeName, onDeleteCus
     }
   };
 
+  const removeRequote = (i) => {
+    const removed = quoteHistory[i];
+    setQuoteHistory((prev) => prev.filter((_, idx) => idx !== i));
+    if (currentQuoteIndex !== null && currentQuoteIndex > i) {
+      setCurrentQuoteIndex((prev) => prev - 1);
+    }
+    setActivityLog((prev) => [
+      { when: "Just now", employee: employeeName || "Unknown", action: "Removed requote", detail: `${removed.carrier} - Quote #${removed.quoteNumber || "N/A"} (dated ${removed.dateQuoted})` },
+      ...prev,
+    ]);
+  };
+
   const saveManualRequote = () => {
     const missing = [];
     if (isBlank(newRequote.driverFirstName)) missing.push("Driver First Name");
@@ -3978,10 +4096,20 @@ function CustomerProfilePage({ customer, onPortalOpen, employeeName, onDeleteCus
                     {!isPending && (
                       <button
                         onClick={() => (isCurrent ? removeCurrentPolicy() : requestMakeCurrentPolicy(i))}
-                        className="text-xs font-semibold"
+                        className="text-xs font-semibold mr-3"
                         style={{ color: isCurrent ? COLORS.red : COLORS.blue }}
                       >
                         {isCurrent ? "Remove as Current Policy" : "Make This Current Policy"}
+                      </button>
+                    )}
+
+                    {!isCurrent && (
+                      <button
+                        onClick={() => removeRequote(i)}
+                        className="text-xs font-semibold"
+                        style={{ color: COLORS.red }}
+                      >
+                        Remove
                       </button>
                     )}
 
