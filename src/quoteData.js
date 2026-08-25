@@ -16,6 +16,8 @@ function rowToQuote(row) {
     office: row.office || "Rampart Office",
     carrier: row.carrier || "",
     policyType: row.policy_type || "Personal Auto",
+    insuredName: row.insured_name || "",
+    otherDetails: row.other_details || "",
     policyAmount: row.policy_amount || "",
     downPayment: row.down_payment || "",
     dateQuoted: row.date_quoted || "",
@@ -42,6 +44,8 @@ function quoteToRow(quote) {
   if ("office" in quote) row.office = quote.office;
   if ("carrier" in quote) row.carrier = quote.carrier;
   if ("policyType" in quote) row.policy_type = quote.policyType;
+  if ("insuredName" in quote) row.insured_name = quote.insuredName;
+  if ("otherDetails" in quote) row.other_details = quote.otherDetails;
   if ("policyAmount" in quote) row.policy_amount = quote.policyAmount;
   if ("downPayment" in quote) row.down_payment = quote.downPayment;
   if ("dateQuoted" in quote) row.date_quoted = quote.dateQuoted;

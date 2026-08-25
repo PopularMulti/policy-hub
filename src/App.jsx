@@ -1191,11 +1191,17 @@ function QuoteDetailPage({ quote, isNew, onBack, onSaveQuote, onAddRequoteToCust
     office: quote?.office || defaultOffice || "Rampart Office",
   });
   const [carrier, setCarrier] = useState(quote?.carrier || "Progressive");
+  const [policyType, setPolicyType] = useState(quote?.policyType || "Personal Auto");
   const [quoteNumber, setQuoteNumber] = useState(quote?.quoteNumber || "");
   const [policyAmount, setPolicyAmount] = useState(quote?.policyAmount || "0");
   const [downPayment, setDownPayment] = useState(quote?.downPayment || "0");
+  const [insuredName, setInsuredName] = useState(quote?.insuredName || "");
+  const [otherDetails, setOtherDetails] = useState(quote?.otherDetails || "");
   const [drivers, setDrivers] = useState(quote?.drivers || null);
   const [vehicles, setVehicles] = useState(quote?.vehicles || null);
+
+  const VEHICLE_POLICY_TYPES = ["Personal Auto", "Commercial Auto", "Motorcycle"];
+  const isVehiclePolicy = VEHICLE_POLICY_TYPES.includes(policyType);
   const [liveTotal, setLiveTotal] = useState(
     quote ? (parseFloat(quote.policyAmount) || 0) + (parseFloat(quote.downPayment) || 0) : 0
   );
@@ -1245,9 +1251,12 @@ function QuoteDetailPage({ quote, isNew, onBack, onSaveQuote, onAddRequoteToCust
   const persistQuote = (existingCustomer, targetCustomerName) => {
     const record = {
       driverName,
-      drivers,
-      vehicles,
+      drivers: isVehiclePolicy ? drivers : [],
+      vehicles: isVehiclePolicy ? vehicles : [],
       carrier,
+      policyType,
+      insuredName: isVehiclePolicy ? "" : insuredName,
+      otherDetails: isVehiclePolicy ? "" : otherDetails,
       quoteNumber: quoteNumber || originalQuoteNumber.current || `NEW-${Date.now()}`,
       phone: form.phone,
       email: form.email,
@@ -1269,7 +1278,7 @@ function QuoteDetailPage({ quote, isNew, onBack, onSaveQuote, onAddRequoteToCust
         driverName,
         carrier,
         quoteNumber: record.quoteNumber,
-        policyType: "Personal Auto",
+        policyType,
         vehicles: vehicles || [],
         policyAmount,
         downPayment,
@@ -1493,6 +1502,23 @@ function QuoteDetailPage({ quote, isNew, onBack, onSaveQuote, onAddRequoteToCust
             </select>
           </div>
           <div>
+            <label className="block text-xs font-semibold mb-1" style={{ color: COLORS.charcoal }}>Policy Type</label>
+            <select
+              value={policyType}
+              onChange={(e) => setPolicyType(e.target.value)}
+              className="w-full border rounded-sm px-3 py-2 text-sm outline-none"
+              style={{ borderColor: "#D8DCE1", color: COLORS.charcoal }}
+            >
+              <option>Personal Auto</option>
+              <option>Commercial Auto</option>
+              <option>General Liability</option>
+              <option>Homeowners</option>
+              <option>Renters</option>
+              <option>Motorcycle</option>
+              <option>Other</option>
+            </select>
+          </div>
+          <div>
             <label className="block text-xs font-semibold mb-1" style={{ color: COLORS.charcoal }}>Company Quoted</label>
             <div className="flex gap-2">
               <select
@@ -1514,7 +1540,7 @@ function QuoteDetailPage({ quote, isNew, onBack, onSaveQuote, onAddRequoteToCust
               </button>
             </div>
           </div>
-          <div className="col-span-2">
+          <div>
             <label className="block text-xs font-semibold mb-1" style={{ color: COLORS.charcoal }}>Quote Number</label>
             <input
               type="text"
@@ -1526,17 +1552,46 @@ function QuoteDetailPage({ quote, isNew, onBack, onSaveQuote, onAddRequoteToCust
           </div>
         </div>
 
-        <AdditionalInfoSection
-          key={driverSyncKey}
-          lockable
-          startLocked={!!(quote?.drivers && quote.drivers.length)}
-          onSaveDetails={handleSaveDetails}
-          initialDriverName={driverSyncKey}
-          initialDrivers={quote?.drivers || null}
-          initialVehicles={quote?.vehicles || null}
-          initialPolicyAmount={quote?.policyAmount || ""}
-          initialDownPayment={quote?.downPayment || ""}
-        />
+        {!isVehiclePolicy && (
+          <div className="grid grid-cols-2 gap-4 mb-4">
+            <div>
+              <label className="block text-xs font-semibold mb-1" style={{ color: COLORS.charcoal }}>Insured</label>
+              <input
+                type="text"
+                value={insuredName}
+                onChange={(e) => setInsuredName(toTitleCase(e.target.value))}
+                placeholder="Name on the policy"
+                className="w-full border rounded-sm px-3 py-2 text-sm outline-none"
+                style={{ borderColor: "#D8DCE1", color: COLORS.charcoal }}
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold mb-1" style={{ color: COLORS.charcoal }}>Other Details</label>
+              <input
+                type="text"
+                value={otherDetails}
+                onChange={(e) => setOtherDetails(e.target.value)}
+                placeholder="e.g. property address, coverage notes"
+                className="w-full border rounded-sm px-3 py-2 text-sm outline-none"
+                style={{ borderColor: "#D8DCE1", color: COLORS.charcoal }}
+              />
+            </div>
+          </div>
+        )}
+
+        {isVehiclePolicy && (
+          <AdditionalInfoSection
+            key={driverSyncKey}
+            lockable
+            startLocked={!!(quote?.drivers && quote.drivers.length)}
+            onSaveDetails={handleSaveDetails}
+            initialDriverName={driverSyncKey}
+            initialDrivers={quote?.drivers || null}
+            initialVehicles={quote?.vehicles || null}
+            initialPolicyAmount={quote?.policyAmount || ""}
+            initialDownPayment={quote?.downPayment || ""}
+          />
+        )}
 
         <div className="mt-6 pt-5 border-t-2" style={{ borderColor: COLORS.blue }}>
           <button
@@ -5077,6 +5132,9 @@ export default function App() {
         zip: quote.zip || "",
         office: quote.office || "Rampart Office",
         carrier: quote.carrier,
+        policyType: quote.policyType || "Personal Auto",
+        insuredName: quote.insuredName || "",
+        otherDetails: quote.otherDetails || "",
         policyNumber: "",
         needsPolicyNumber: true,
         drivers:
