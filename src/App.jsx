@@ -287,7 +287,7 @@ function TopHeader({ activePage, onNavigate, employeeName, onSwitchUser }) {
   );
 }
 
-function DashboardPage({ onOpenCustomer, onOpenQuote, onAddNewCustomer, onAddNewQuote, onGoToQuotes, quotes, customers, onPortalOpen, activeCustomerNames, carrierPortalUrls }) {
+function DashboardPage({ onOpenCustomer, onOpenQuote, onAddNewCustomer, onAddNewQuote, onGoToQuotes, quotes, customers, onPortalOpen, carrierPortalUrls }) {
   const [query, setQuery] = useState("");
   const [dateSort, setDateSort] = useState("desc");
   const results = query.trim() ? customers.filter((c) => customerMatchesQuery(c, query)) : [];
@@ -353,7 +353,7 @@ function DashboardPage({ onOpenCustomer, onOpenQuote, onAddNewCustomer, onAddNew
             ACTIVE CUSTOMERS
           </div>
           <div className="text-3xl font-bold mt-1" style={{ color: COLORS.slate }}>
-            {customers.filter((c) => activeCustomerNames && activeCustomerNames.has(c.name)).length.toLocaleString()}
+            {customers.filter((c) => c.active).length.toLocaleString()}
           </div>
         </div>
         <button
@@ -5048,7 +5048,6 @@ export default function App() {
   const [adminUnlocked, setAdminUnlocked] = useState(false);
   const [quotes, setQuotes] = useState([]);
   const [quotesLoading, setQuotesLoading] = useState(true);
-  const [activeCustomerNames, setActiveCustomerNames] = useState(new Set());
   const [employees, setEmployees] = useState([]);
   const [carriers, setCarriers] = useState([]);
   const carrierPortalUrls = Object.fromEntries(carriers.map((c) => [c.name, c.portalUrl]));
@@ -5087,12 +5086,7 @@ export default function App() {
 
   const markCustomerActive = (name) => {
     if (!name) return;
-    setActiveCustomerNames((prev) => {
-      if (prev.has(name)) return prev;
-      const next = new Set(prev);
-      next.add(name);
-      return next;
-    });
+    updateCustomerRecord(name, { active: true });
   };
 
   const openCustomer = (customer) => {
@@ -5132,11 +5126,10 @@ export default function App() {
   };
 
   const addCustomer = async (record) => {
-    const withCreator = { ...record, createdBy: employeeProfile?.id || null };
+    const withCreator = { ...record, createdBy: employeeProfile?.id || null, active: true };
     const saved = await insertCustomer(withCreator);
     if (!saved) return null;
     setCustomers((prev) => [...prev, saved]);
-    markCustomerActive(saved.name);
     return saved;
   };
 
@@ -5183,8 +5176,9 @@ export default function App() {
       };
       targetCustomer = await addCustomer(newCustomerData);
       if (!targetCustomer) return;
+    } else {
+      markCustomerActive(targetCustomer.name);
     }
-    markCustomerActive(targetCustomer.name);
     if (quote.id) await deleteQuoteById(quote.id);
     setQuotes((prev) => prev.filter((q) => q.quoteNumber !== quote.quoteNumber));
     openCustomer(targetCustomer);
@@ -5248,7 +5242,6 @@ export default function App() {
           quotes={quotes}
           customers={customers}
           onPortalOpen={markCustomerActive}
-          activeCustomerNames={activeCustomerNames}
           carrierPortalUrls={carrierPortalUrls}
         />
       )}

@@ -39,6 +39,7 @@ function rowToCustomer(row) {
     followUpReason: row.follow_up_reason || "",
     followUpDate: row.follow_up_date || "",
     archived: row.archived || false,
+    active: row.active || false,
     createdBy: row.created_by || "",
     createdAt: row.created_at || "",
   };
@@ -78,6 +79,7 @@ function customerToRow(customer) {
   if ("followUpReason" in customer) row.follow_up_reason = customer.followUpReason;
   if ("followUpDate" in customer) row.follow_up_date = customer.followUpDate;
   if ("archived" in customer) row.archived = customer.archived;
+  if ("active" in customer) row.active = customer.active;
   if ("createdBy" in customer) row.created_by = customer.createdBy || null;
   return row;
 }
