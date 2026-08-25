@@ -3,7 +3,7 @@ import { Search, Lock } from "lucide-react";
 import { supabase } from "./supabaseClient";
 import { fetchCustomers, insertCustomer, updateCustomerById, deleteCustomerById } from "./customerData";
 import { fetchQuotes, insertQuote, updateQuoteById, deleteQuoteById } from "./quoteData";
-import { uploadDocumentFile, getDocumentUrl } from "./documentStorage";
+import { uploadDocumentFile, getDocumentUrl, deleteDocumentFile } from "./documentStorage";
 import { fetchCarriers, insertCarrier, updateCarrierById, deleteCarrierById } from "./carrierData";
 import { fetchEmployees, updateEmployeeById } from "./employeeData";
 
@@ -1305,6 +1305,17 @@ function QuoteDetailPage({ quote, isNew, onBack, onSaveQuote, onAddRequoteToCust
   const [otherDetails, setOtherDetails] = useState(quote?.otherDetails || "");
   const [drivers, setDrivers] = useState(quote?.drivers || null);
   const [vehicles, setVehicles] = useState(quote?.vehicles || null);
+  const [companyOptions, setCompanyOptions] = useState(quote?.companyOptions || []);
+
+  const addCompanyOption = () => {
+    setCompanyOptions((prev) => [...prev, { carrier: "Progressive", quoteNumber: "", policyAmount: "0", downPayment: "0" }]);
+  };
+  const updateCompanyOption = (i, field, value) => {
+    setCompanyOptions((prev) => prev.map((o, idx) => (idx === i ? { ...o, [field]: value } : o)));
+  };
+  const removeCompanyOption = (i) => {
+    setCompanyOptions((prev) => prev.filter((_, idx) => idx !== i));
+  };
 
   const VEHICLE_POLICY_TYPES = ["Personal Auto", "Commercial Auto", "Motorcycle"];
   const isVehiclePolicy = VEHICLE_POLICY_TYPES.includes(policyType);
@@ -1316,6 +1327,7 @@ function QuoteDetailPage({ quote, isNew, onBack, onSaveQuote, onAddRequoteToCust
   const [duplicateMatch, setDuplicateMatch] = useState(null);
   const [savedMessage, setSavedMessage] = useState("");
   const originalQuoteNumber = React.useRef(quote?.quoteNumber || null);
+  const quoteIdRef = React.useRef(quote?.id || null);
 
   const updateField = (field, value) => {
     let v = value;
@@ -1354,7 +1366,7 @@ function QuoteDetailPage({ quote, isNew, onBack, onSaveQuote, onAddRequoteToCust
     }
   };
 
-  const persistQuote = (existingCustomer, targetCustomerName) => {
+  const persistQuote = async (existingCustomer, targetCustomerName) => {
     const record = {
       driverName,
       drivers: isVehiclePolicy ? drivers : [],
@@ -1377,8 +1389,12 @@ function QuoteDetailPage({ quote, isNew, onBack, onSaveQuote, onAddRequoteToCust
       bound: quote?.bound || false,
       existingCustomer,
       notes,
+      companyOptions,
     };
-    if (onSaveQuote) onSaveQuote(record, originalQuoteNumber.current, quote?.id);
+    if (onSaveQuote) {
+      const saved = await onSaveQuote(record, originalQuoteNumber.current, quoteIdRef.current);
+      if (saved?.id) quoteIdRef.current = saved.id;
+    }
     if (existingCustomer && targetCustomerName && onAddRequoteToCustomer) {
       onAddRequoteToCustomer(targetCustomerName, {
         driverName,
@@ -1393,6 +1409,19 @@ function QuoteDetailPage({ quote, isNew, onBack, onSaveQuote, onAddRequoteToCust
     }
     originalQuoteNumber.current = quoteNumber || originalQuoteNumber.current;
   };
+
+  const companyOptionsMounted = React.useRef(false);
+  useEffect(() => {
+    if (!companyOptionsMounted.current) {
+      companyOptionsMounted.current = true;
+      return;
+    }
+    // Only auto-save for a quote that's already been saved once (has an id).
+    // A brand-new, not-yet-saved quote still requires the initial SAVE QUOTE click.
+    if (quoteIdRef.current && onSaveQuote) {
+      onSaveQuote({ companyOptions }, originalQuoteNumber.current, quoteIdRef.current);
+    }
+  }, [companyOptions]);
 
   const saveQuote = () => {
     setSavedMessage("");
@@ -1624,38 +1653,6 @@ function QuoteDetailPage({ quote, isNew, onBack, onSaveQuote, onAddRequoteToCust
               <option>Other</option>
             </select>
           </div>
-          <div>
-            <label className="block text-xs font-semibold mb-1" style={{ color: COLORS.charcoal }}>Company Quoted</label>
-            <div className="flex gap-2">
-              <select
-                value={carrier}
-                onChange={(e) => setCarrier(e.target.value)}
-                className="w-full border rounded-sm px-3 py-2 text-sm outline-none"
-                style={{ borderColor: "#D8DCE1", color: COLORS.charcoal }}
-              >
-                {Object.keys(carrierPortalUrls).map((name) => (
-                  <option key={name}>{name}</option>
-                ))}
-              </select>
-              <button
-                onClick={() => window.open(carrierPortalUrls[carrier] || "#", "_blank")}
-                className="px-3 py-2 text-xs font-semibold rounded-sm border-2 whitespace-nowrap"
-                style={{ color: COLORS.blue, borderColor: COLORS.blue, backgroundColor: "white" }}
-              >
-                PORTAL
-              </button>
-            </div>
-          </div>
-          <div>
-            <label className="block text-xs font-semibold mb-1" style={{ color: COLORS.charcoal }}>Quote Number</label>
-            <input
-              type="text"
-              value={quoteNumber}
-              onChange={(e) => setQuoteNumber(e.target.value)}
-              className="w-full border rounded-sm px-3 py-2 text-sm outline-none"
-              style={{ borderColor: "#D8DCE1", color: COLORS.charcoal }}
-            />
-          </div>
         </div>
 
         {!isVehiclePolicy && (
@@ -1698,6 +1695,136 @@ function QuoteDetailPage({ quote, isNew, onBack, onSaveQuote, onAddRequoteToCust
             initialDownPayment={quote?.downPayment || ""}
           />
         )}
+
+        <div className="mt-6 pt-5 border-t" style={{ borderColor: "#D8DCE1" }}>
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <h3 className="text-sm font-bold" style={{ color: COLORS.charcoal }}>Companies Quoted</h3>
+              <p className="text-xs mt-0.5" style={{ color: COLORS.slate }}>
+                Quoting the same customer with more than one carrier? Add each option here, then print a comparison PDF for the customer.
+              </p>
+            </div>
+            <button onClick={addCompanyOption} className="text-xs font-semibold whitespace-nowrap" style={{ color: COLORS.blue }}>
+              + Add Company Option
+            </button>
+          </div>
+
+          <div className="mb-3 p-4 border-2 rounded-sm" style={{ borderColor: COLORS.blue, backgroundColor: COLORS.lightGray }}>
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs font-bold px-2 py-0.5 rounded-sm text-white" style={{ backgroundColor: COLORS.blue }}>
+                PRIMARY
+              </span>
+              <span className="text-sm font-semibold" style={{ color: COLORS.blue }}>
+                Total: {formatMoney((parseFloat(policyAmount) || 0) + (parseFloat(downPayment) || 0))}
+              </span>
+            </div>
+            <div className="mb-3">
+              <label className="block text-xs font-semibold mb-1" style={{ color: COLORS.charcoal }}>Company</label>
+              <div className="flex gap-2">
+                <select
+                  value={carrier}
+                  onChange={(e) => setCarrier(e.target.value)}
+                  className="flex-1 min-w-0 border rounded-sm px-3 py-2 text-sm outline-none bg-white"
+                  style={{ borderColor: "#D8DCE1", color: COLORS.charcoal }}
+                >
+                  {Object.keys(carrierPortalUrls).map((name) => (
+                    <option key={name}>{name}</option>
+                  ))}
+                </select>
+                <button
+                  onClick={() => window.open(carrierPortalUrls[carrier] || "#", "_blank")}
+                  className="px-3 py-2 text-xs font-semibold rounded-sm border-2 whitespace-nowrap flex-shrink-0"
+                  style={{ color: COLORS.blue, borderColor: COLORS.blue, backgroundColor: "white" }}
+                >
+                  PORTAL
+                </button>
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <label className="block text-xs font-semibold mb-1" style={{ color: COLORS.charcoal }}>Quote Number</label>
+                <input
+                  type="text"
+                  value={quoteNumber}
+                  onChange={(e) => setQuoteNumber(e.target.value)}
+                  className="w-full border rounded-sm px-3 py-2 text-sm outline-none bg-white"
+                  style={{ borderColor: "#D8DCE1", color: COLORS.charcoal }}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold mb-1" style={{ color: COLORS.charcoal }}>Policy Amount</label>
+                <MoneyInput value={policyAmount} onChange={setPolicyAmount} />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold mb-1" style={{ color: COLORS.charcoal }}>Down Payment</label>
+                <MoneyInput value={downPayment} onChange={setDownPayment} />
+              </div>
+            </div>
+          </div>
+
+          {companyOptions.map((opt, i) => (
+            <div key={i} className="mb-3 p-4 border rounded-sm" style={{ borderColor: "#D8DCE1", backgroundColor: COLORS.lightGray }}>
+              <div className="flex items-center justify-between mb-3">
+                <button onClick={() => removeCompanyOption(i)} className="text-xs font-semibold" style={{ color: COLORS.red }}>
+                  Remove
+                </button>
+                <span className="text-sm font-semibold" style={{ color: COLORS.charcoal }}>
+                  Total: {formatMoney((parseFloat(opt.policyAmount) || 0) + (parseFloat(opt.downPayment) || 0))}
+                </span>
+              </div>
+              <div className="mb-3">
+                <label className="block text-xs font-semibold mb-1" style={{ color: COLORS.charcoal }}>Company</label>
+                <div className="flex gap-2">
+                  <select
+                    value={opt.carrier}
+                    onChange={(e) => updateCompanyOption(i, "carrier", e.target.value)}
+                    className="flex-1 min-w-0 border rounded-sm px-3 py-2 text-sm outline-none bg-white"
+                    style={{ borderColor: "#D8DCE1", color: COLORS.charcoal }}
+                  >
+                    {Object.keys(carrierPortalUrls).map((name) => (
+                      <option key={name}>{name}</option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={() => window.open(carrierPortalUrls[opt.carrier] || "#", "_blank")}
+                    className="px-3 py-2 text-xs font-semibold rounded-sm border-2 whitespace-nowrap flex-shrink-0"
+                    style={{ color: COLORS.blue, borderColor: COLORS.blue, backgroundColor: "white" }}
+                  >
+                    PORTAL
+                  </button>
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold mb-1" style={{ color: COLORS.charcoal }}>Quote Number</label>
+                  <input
+                    type="text"
+                    value={opt.quoteNumber || ""}
+                    onChange={(e) => updateCompanyOption(i, "quoteNumber", e.target.value)}
+                    className="w-full border rounded-sm px-3 py-2 text-sm outline-none bg-white"
+                    style={{ borderColor: "#D8DCE1", color: COLORS.charcoal }}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold mb-1" style={{ color: COLORS.charcoal }}>Policy Amount</label>
+                  <MoneyInput value={opt.policyAmount} onChange={(v) => updateCompanyOption(i, "policyAmount", v)} />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold mb-1" style={{ color: COLORS.charcoal }}>Down Payment</label>
+                  <MoneyInput value={opt.downPayment} onChange={(v) => updateCompanyOption(i, "downPayment", v)} />
+                </div>
+              </div>
+            </div>
+          ))}
+
+          <button
+            onClick={() => downloadQuoteComparisonPdf({ driverName: `${nameForm.firstName} ${nameForm.lastName}`.trim(), form, quoteNumber, carrier, policyAmount, downPayment, companyOptions, drivers, vehicles })}
+            className="px-4 py-2 text-sm font-semibold rounded-sm border-2 mt-1"
+            style={{ color: COLORS.blue, borderColor: COLORS.blue, backgroundColor: "white" }}
+          >
+            Download Comparison PDF
+          </button>
+        </div>
 
         <div className="mt-6 pt-5 border-t-2" style={{ borderColor: COLORS.blue }}>
           <button
@@ -1830,6 +1957,127 @@ function formatMoney(value) {
   return `$${num.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
+function escapeHtml(value) {
+  return String(value || "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+function downloadQuoteComparisonPdf({ driverName, form, quoteNumber, carrier, policyAmount, downPayment, companyOptions, drivers, vehicles }) {
+  const rows = [
+    { carrier, quoteNumber, policyAmount, downPayment },
+    ...(companyOptions || []),
+  ];
+  const rowsHtml = rows
+    .map((r) => {
+      const total = (parseFloat(r.policyAmount) || 0) + (parseFloat(r.downPayment) || 0);
+      return `<tr>
+        <td>${escapeHtml(r.carrier)}</td>
+        <td>${escapeHtml(r.quoteNumber || "N/A")}</td>
+        <td>${formatMoney(r.policyAmount)}</td>
+        <td>${formatMoney(r.downPayment)}</td>
+        <td class="total-cell">${formatMoney(total)}</td>
+      </tr>`;
+    })
+    .join("");
+
+  const driversHtml = (drivers || [])
+    .filter((d) => d && (d.name || d.firstName))
+    .map((d, i) => {
+      const dName = d.name || `${d.firstName || ""} ${d.lastName || ""}`.trim();
+      const details = [d.dob && `DOB: ${escapeHtml(d.dob)}`, d.license && `License: ${escapeHtml(d.license)}`]
+        .filter(Boolean)
+        .join(" &middot; ");
+      return `<div class="person-row"><span class="person-index">${i + 1}</span><span class="person-name">${escapeHtml(dName)}</span>${details ? `<span class="person-details">${details}</span>` : ""}</div>`;
+    })
+    .join("");
+
+  const vehiclesHtml = (vehicles || [])
+    .filter((v) => v && (v.year || v.make || v.model || v.vin))
+    .map((v, i) => {
+      const vName = [v.year, v.make, v.model].filter(Boolean).join(" ");
+      const isLiability = (v.coverage || "Liability Only") === "Liability Only";
+      const badge = `<span class="badge ${isLiability ? "badge-liability" : "badge-full"}">${escapeHtml(v.coverage || "Liability Only")}</span>`;
+      return `<div class="person-row"><span class="person-index">${i + 1}</span><span class="person-name">${escapeHtml(vName || "Vehicle")}</span>${badge}${v.vin ? `<span class="person-details">VIN: ${escapeHtml(v.vin)}</span>` : ""}</div>`;
+    })
+    .join("");
+
+  const html = `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>Quote Comparison - ${escapeHtml(driverName)}</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: Arial, Helvetica, sans-serif; color: #4A4A4A; padding: 0; margin: 0; }
+  .header { display: flex; align-items: center; justify-content: space-between; padding: 28px 36px 20px; border-bottom: 4px solid #1768A5; }
+  .header img { height: 52px; }
+  .header .title { text-align: right; }
+  .header .title h1 { font-size: 20px; margin: 0; color: #384353; }
+  .header .title p { margin: 2px 0 0; font-size: 12px; color: #4D6278; }
+  .content { padding: 24px 36px 36px; }
+  .customer-block { margin-bottom: 24px; }
+  .customer-block h2 { font-size: 16px; margin: 0 0 4px; color: #1768A5; }
+  .customer-block p { margin: 0; font-size: 13px; color: #4D6278; }
+  h3.section-title { font-size: 13px; text-transform: uppercase; letter-spacing: 0.04em; color: #4D6278; margin: 22px 0 8px; border-bottom: 1px solid #D8DCE1; padding-bottom: 4px; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 10px 12px; font-size: 13px; }
+  th { background: #384353; color: white; font-weight: 600; }
+  tbody tr:nth-child(even) { background: #F1F2F4; }
+  tbody tr { border-bottom: 1px solid #E4E7EB; }
+  td.total-cell { font-weight: 700; color: #1768A5; }
+  .person-row { display: flex; align-items: baseline; gap: 10px; padding: 6px 4px; font-size: 13px; border-bottom: 1px solid #F1F2F4; }
+  .person-index { color: #1768A5; font-weight: 700; width: 16px; }
+  .person-name { font-weight: 600; color: #384353; flex: 0 0 auto; }
+  .person-details { color: #4D6278; }
+  .badge { display: inline-block; font-size: 9px; font-weight: 700; text-transform: uppercase; padding: 2px 6px; border-radius: 3px; }
+  .badge-liability { background: #FBE7E7; color: #B03A3A; }
+  .badge-full { background: #E4EEF6; color: #1768A5; }
+  .disclaimer { margin-top: 22px; padding: 10px 14px; background: #FBE7E7; border-left: 3px solid #B03A3A; border-radius: 3px; font-size: 11px; color: #4A4A4A; font-style: italic; }
+  .footer { margin-top: 24px; padding-top: 12px; border-top: 1px solid #D8DCE1; font-size: 11px; color: #4D6278; }
+  @media print { .header { padding: 20px 24px 16px; } .content { padding: 16px 24px 24px; } }
+</style>
+</head>
+<body>
+  <div class="header">
+    <img src="${FULL_LOGO_SRC}" alt="Popular Multiservice" />
+    <div class="title">
+      <h1>Quote Comparison</h1>
+      <p>Prepared ${escapeHtml(new Date().toLocaleDateString())}</p>
+    </div>
+  </div>
+  <div class="content">
+    <div class="customer-block">
+      <h2>${escapeHtml(driverName)}</h2>
+      <p>${escapeHtml(form.phone)} &middot; ${escapeHtml(form.office)}</p>
+    </div>
+
+    <h3 class="section-title">Company Options</h3>
+    <table>
+      <thead>
+        <tr><th>Company</th><th>Quote #</th><th>Policy Amount</th><th>Application Fee</th><th>Total</th></tr>
+      </thead>
+      <tbody>${rowsHtml}</tbody>
+    </table>
+
+    ${driversHtml ? `<h3 class="section-title">Drivers</h3>${driversHtml}` : ""}
+    ${vehiclesHtml ? `<h3 class="section-title">Vehicles</h3>${vehiclesHtml}` : ""}
+
+    <div class="disclaimer">This is a quote only, not a bound policy. Prices shown are estimates and may vary. This quote is valid for 30 days from the date prepared above.</div>
+
+    <div class="footer">Popular Multiservice &middot; This comparison is for internal reference and customer presentation purposes.</div>
+  </div>
+</body>
+</html>`;
+
+  const win = window.open("", "_blank");
+  if (!win) return;
+  win.document.open();
+  win.document.write(html);
+  win.document.close();
+  win.focus();
+  setTimeout(() => win.print(), 300);
+}
+
+
 function MoneyInput({ value, onChange, placeholder }) {
   return (
     <div className="relative">
@@ -1864,7 +2112,7 @@ const blankDriver = () => ({
   status: "Included",
 });
 
-const blankVehicle = () => ({ vin: "", year: "", make: "", model: "" });
+const blankVehicle = () => ({ vin: "", year: "", make: "", model: "", coverage: "Liability Only" });
 
 async function decodeVin(vin) {
   const cleaned = vin.trim().toUpperCase();
@@ -2053,7 +2301,18 @@ function AdditionalInfoSection({
                   <span className="text-sm font-semibold" style={{ color: COLORS.charcoal }}>
                     {i + 1}. {(v.year || v.make || v.model) ? [v.year, v.make, v.model].filter(Boolean).join(" ") : `Vehicle ${i + 1}`}
                   </span>
-                  <span className="text-xs" style={{ color: COLORS.slate }}>{v.vin || "-"}</span>
+                  <span className="flex items-center gap-3">
+                    <span
+                      className="text-xs font-semibold px-2 py-0.5 rounded-sm"
+                      style={{
+                        color: (v.coverage || "Liability Only") === "Liability Only" ? COLORS.red : COLORS.blue,
+                        backgroundColor: COLORS.lightGray,
+                      }}
+                    >
+                      {v.coverage || "Liability Only"}
+                    </span>
+                    <span className="text-xs" style={{ color: COLORS.slate }}>{v.vin || "-"}</span>
+                  </span>
                 </div>
               ))}
             </div>
@@ -2313,6 +2572,23 @@ function AdditionalInfoSection({
                       />
                     </div>
                   </div>
+                  <div className="mt-3">
+                    <label className="block text-xs font-semibold mb-1" style={{ color: COLORS.charcoal }}>Coverage</label>
+                    <div className="flex gap-4">
+                      {["Liability Only", "Full Coverage"].map((option) => (
+                        <label key={option} className="flex items-center gap-2 text-sm cursor-pointer" style={{ color: COLORS.charcoal }}>
+                          <input
+                            type="checkbox"
+                            checked={(v.coverage || "Liability Only") === option}
+                            onChange={() => updateVehicleField(i, "coverage", option)}
+                            className="h-4 w-4"
+                            style={{ accentColor: COLORS.blue }}
+                          />
+                          {option}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               ))}
             </div>
@@ -2531,6 +2807,20 @@ function PolicyDetailView({ policy, employeeName, carrierPortalUrls, customerId,
       newTab.close();
       alert("Couldn't open that document. It may have been removed, or there's a permissions issue with the storage bucket.");
     }
+  };
+
+  const [confirmDeleteDoc, setConfirmDeleteDoc] = useState(null);
+  const [deletingDoc, setDeletingDoc] = useState(false);
+
+  const deleteDocument = async (doc) => {
+    setDeletingDoc(true);
+    if (doc.path) await deleteDocumentFile(doc.path);
+    const updatedDocs = documents.filter((d) => d !== doc);
+    setDocuments(updatedDocs);
+    const activityEntry = logActivity("Document deleted", `${doc.name} (${doc.category})`);
+    onSave({ policyType, carrier, policyNumber, insuredName, otherDetails, documents: updatedDocs, requotes, policyHistoryLog, activityLog: [activityEntry, ...activityLog] });
+    setDeletingDoc(false);
+    setConfirmDeleteDoc(null);
   };
 
   const saveManualRequote = () => {
@@ -2898,10 +3188,11 @@ function PolicyDetailView({ policy, employeeName, carrierPortalUrls, customerId,
             </button>
             <span className="text-xs" style={{ color: COLORS.slate }}>PDF files only</span>
           </div>
+          <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr style={{ backgroundColor: COLORS.slate }}>
-                {["File Name", "Category", "Upload Date", "Uploaded By"].map((h) => (
+                {["File Name", "Category", "Upload Date", "Uploaded By", ""].map((h) => (
                   <th key={h} className="text-left px-4 py-3 text-white font-bold">{h}</th>
                 ))}
               </tr>
@@ -2921,10 +3212,33 @@ function PolicyDetailView({ policy, employeeName, carrierPortalUrls, customerId,
                   <td className="px-4 py-3" style={{ color: COLORS.charcoal }}>{d.category}</td>
                   <td className="px-4 py-3" style={{ color: COLORS.charcoal }}>{d.date}</td>
                   <td className="px-4 py-3" style={{ color: COLORS.charcoal }}>{d.uploadedBy}</td>
+                  <td className="px-4 py-3 text-right">
+                    {confirmDeleteDoc === d ? (
+                      <div className="flex items-center justify-end gap-3">
+                        <span className="text-xs" style={{ color: COLORS.red }}>Delete permanently?</span>
+                        <button
+                          onClick={() => deleteDocument(d)}
+                          disabled={deletingDoc}
+                          className="text-xs font-semibold"
+                          style={{ color: COLORS.red, opacity: deletingDoc ? 0.6 : 1 }}
+                        >
+                          {deletingDoc ? "Deleting..." : "Yes, Delete"}
+                        </button>
+                        <button onClick={() => setConfirmDeleteDoc(null)} className="text-xs font-semibold" style={{ color: COLORS.slate }}>
+                          Cancel
+                        </button>
+                      </div>
+                    ) : (
+                      <button onClick={() => setConfirmDeleteDoc(d)} className="text-xs font-semibold" style={{ color: COLORS.red }}>
+                        Delete
+                      </button>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
+          </div>
           {documents.length === 0 && (
             <p className="text-sm text-center py-6" style={{ color: COLORS.slate }}>No documents uploaded for this policy yet.</p>
           )}
@@ -3287,6 +3601,23 @@ function CustomerProfilePage({ customer, onPortalOpen, employeeName, onDeleteCus
       newTab.close();
       alert("Couldn't open that document. It may have been removed, or there's a permissions issue with the storage bucket.");
     }
+  };
+
+  const [confirmDeleteDoc, setConfirmDeleteDoc] = useState(null);
+  const [deletingDoc, setDeletingDoc] = useState(false);
+
+  const deleteDocument = async (doc) => {
+    setDeletingDoc(true);
+    if (doc.path) await deleteDocumentFile(doc.path);
+    const updatedDocs = documents.filter((d) => d !== doc);
+    setDocuments(updatedDocs);
+    if (onUpdateCustomer) onUpdateCustomer(customer.name, { documents: updatedDocs });
+    setActivityLog((prev) => [
+      { when: "Just now", employee: employeeName || "Unknown", action: "Document deleted", detail: `${doc.name} (${doc.category})` },
+      ...prev,
+    ]);
+    setDeletingDoc(false);
+    setConfirmDeleteDoc(null);
   };
 
   const addQuoteNote = () => {
@@ -4071,7 +4402,10 @@ function CustomerProfilePage({ customer, onPortalOpen, employeeName, onDeleteCus
                       <span className="text-xs font-bold block mb-1" style={{ color: COLORS.slate }}>VEHICLES</span>
                       <ol className="list-decimal list-inside space-y-0.5">
                         {q.vehicles.map((v, vi) => (
-                          <li key={vi}>{v.description ? v.description : `${v.year} ${v.make} ${v.model} - ${v.vin}`}</li>
+                          <li key={vi}>
+                            {v.description ? v.description : `${v.year} ${v.make} ${v.model} - ${v.vin}`}
+                            {v.coverage && <span style={{ color: v.coverage === "Liability Only" ? COLORS.red : COLORS.blue }}> ({v.coverage})</span>}
+                          </li>
                         ))}
                       </ol>
                     </div>
@@ -4245,10 +4579,11 @@ function CustomerProfilePage({ customer, onPortalOpen, employeeName, onDeleteCus
               </button>
               <span className="text-xs" style={{ color: COLORS.slate }}>PDF files only</span>
             </div>
+            <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr style={{ backgroundColor: COLORS.slate }}>
-                  {["File Name", "Category", "Upload Date", "Uploaded By"].map((h) => (
+                  {["File Name", "Category", "Upload Date", "Uploaded By", ""].map((h) => (
                     <th key={h} className="text-left px-4 py-3 text-white font-bold">{h}</th>
                   ))}
                 </tr>
@@ -4268,10 +4603,33 @@ function CustomerProfilePage({ customer, onPortalOpen, employeeName, onDeleteCus
                     <td className="px-4 py-3" style={{ color: COLORS.charcoal }}>{d.category}</td>
                     <td className="px-4 py-3" style={{ color: COLORS.charcoal }}>{d.date}</td>
                     <td className="px-4 py-3" style={{ color: COLORS.charcoal }}>{d.uploadedBy}</td>
+                    <td className="px-4 py-3 text-right">
+                      {confirmDeleteDoc === d ? (
+                        <div className="flex items-center justify-end gap-3">
+                          <span className="text-xs" style={{ color: COLORS.red }}>Delete permanently?</span>
+                          <button
+                            onClick={() => deleteDocument(d)}
+                            disabled={deletingDoc}
+                            className="text-xs font-semibold"
+                            style={{ color: COLORS.red, opacity: deletingDoc ? 0.6 : 1 }}
+                          >
+                            {deletingDoc ? "Deleting..." : "Yes, Delete"}
+                          </button>
+                          <button onClick={() => setConfirmDeleteDoc(null)} className="text-xs font-semibold" style={{ color: COLORS.slate }}>
+                            Cancel
+                          </button>
+                        </div>
+                      ) : (
+                        <button onClick={() => setConfirmDeleteDoc(d)} className="text-xs font-semibold" style={{ color: COLORS.red }}>
+                          Delete
+                        </button>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
+            </div>
           </div>
         )}
         {tab !== "Overview" && tab !== "Activity" && tab !== "Documents" && tab !== "Requote" && tab !== "Policy History" && (
