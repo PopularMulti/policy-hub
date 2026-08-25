@@ -1760,14 +1760,31 @@ const blankDriver = () => ({
 
 const blankVehicle = () => ({ vin: "", year: "", make: "", model: "" });
 
-const vinLookupTable = {
-  "1HGCM82633A004352": { year: "2003", make: "Honda", model: "Accord" },
-  "1FTFW1ET1EFC12345": { year: "2014", make: "Ford", model: "F-150" },
-  "3GNAXUEV7LL123456": { year: "2020", make: "Chevrolet", model: "Equinox" },
-};
-
-function decodeVin(vin) {
-  return vinLookupTable[vin.trim().toUpperCase()] || null;
+async function decodeVin(vin) {
+  const cleaned = vin.trim().toUpperCase();
+  if (cleaned.length !== 17) return null;
+  try {
+    const res = await fetch(`https://vpic.nhtsa.dot.gov/api/vehicles/decodevin/${cleaned}?format=json`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    const results = data.Results || [];
+    const getValue = (variable) => {
+      const row = results.find((r) => r.Variable === variable);
+      return row && row.Value && row.Value !== "Not Applicable" ? row.Value : "";
+    };
+    const year = getValue("Model Year");
+    const make = getValue("Make");
+    const model = getValue("Model");
+    if (!year && !make && !model) return null;
+    return {
+      year,
+      make: make ? toTitleCase(make) : "",
+      model: model ? toTitleCase(model) : "",
+    };
+  } catch (err) {
+    console.error("VIN decode failed:", err.message);
+    return null;
+  }
 }
 
 function AdditionalInfoSection({
@@ -1828,14 +1845,26 @@ function AdditionalInfoSection({
     setVehicles((prev) => prev.map((veh, idx) => (idx === i ? { ...veh, [field]: v } : veh)));
   };
 
-  const lookupVin = (i) => {
-    setVehicles((prev) =>
-      prev.map((v, idx) => {
-        if (idx !== i) return v;
-        const match = decodeVin(v.vin);
-        return match ? { ...v, ...match } : v;
-      })
-    );
+  const [vinLookupLoading, setVinLookupLoading] = useState(null);
+  const [vinLookupError, setVinLookupError] = useState(null);
+
+  const lookupVin = async (i) => {
+    const vin = vehicles[i].vin;
+    if (!vin || vin.trim().length !== 17) {
+      setVinLookupError(i);
+      setTimeout(() => setVinLookupError((cur) => (cur === i ? null : cur)), 3000);
+      return;
+    }
+    setVinLookupLoading(i);
+    setVinLookupError(null);
+    const match = await decodeVin(vin);
+    setVinLookupLoading(null);
+    if (match) {
+      setVehicles((prev) => prev.map((v, idx) => (idx === i ? { ...v, ...match } : v)));
+    } else {
+      setVinLookupError(i);
+      setTimeout(() => setVinLookupError((cur) => (cur === i ? null : cur)), 3000);
+    }
   };
 
   const addVehicle = () => setVehicles((prev) => [...prev, blankVehicle()]);
@@ -2122,25 +2151,31 @@ function AdditionalInfoSection({
                       Remove
                     </button>
                   </div>
-                  <div className="flex gap-2 mb-3">
+                  <div className="flex gap-2 mb-1">
                     <input
                       type="text"
                       value={v.vin}
                       onChange={(e) => updateVehicleField(i, "vin", e.target.value)}
-                      onBlur={() => lookupVin(i)}
+                      onBlur={() => v.vin && v.vin.trim() && lookupVin(i)}
                       placeholder="VIN"
                       className="w-full border rounded-sm px-3 py-2 text-sm outline-none bg-white"
-                      style={{ borderColor: "#D8DCE1", color: COLORS.charcoal }}
+                      style={{ borderColor: vinLookupError === i ? COLORS.red : "#D8DCE1", color: COLORS.charcoal }}
                     />
                     <button
                       onClick={() => lookupVin(i)}
+                      disabled={vinLookupLoading === i}
                       className="px-3 text-xs font-semibold rounded-sm border whitespace-nowrap"
-                      style={{ color: COLORS.blue, borderColor: "#D8DCE1", backgroundColor: "white" }}
+                      style={{ color: COLORS.blue, borderColor: "#D8DCE1", backgroundColor: "white", opacity: vinLookupLoading === i ? 0.6 : 1 }}
                     >
-                      Look Up
+                      {vinLookupLoading === i ? "Looking up..." : "Look Up"}
                     </button>
                   </div>
-                  <div className="grid grid-cols-3 gap-3">
+                  {vinLookupError === i && (
+                    <p className="text-xs mb-2" style={{ color: COLORS.red }}>
+                      Couldn't find that VIN. Double-check it's entered correctly (17 characters), or fill in Year/Make/Model manually.
+                    </p>
+                  )}
+                  <div className="grid grid-cols-3 gap-3 mt-3">
                     <div>
                       <label className="block text-xs font-semibold mb-1" style={{ color: COLORS.charcoal }}>Year</label>
                       <input
