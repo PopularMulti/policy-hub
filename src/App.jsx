@@ -22,6 +22,10 @@ const FULL_LOGO_SRC = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAABwgAAAHCCAY
 const NAV_ITEMS = ["Dashboard", "Customers", "Quotes", "Policies", "Admin"];
 const TABS = ["Overview", "Requote", "Policy History", "Documents", "Activity"];
 const POLICY_TYPES = ["Personal Auto", "Commercial Auto", "General Liability", "Homeowners", "Renters", "Motorcycle", "Other"];
+const OFFICE_CONTACT_INFO = {
+  "Rampart Office": { address: "5727 Rampart St A-9, Houston, TX 77081", phone: "713-668-9200" },
+  "Harwin Office": { address: "10304 Harwin Dr Ste D, Houston, TX 77036", phone: "713-772-9050" },
+};
 
 function SortableHeader({ label, field, sortField, sortDir, onSort }) {
   const active = sortField === field;
@@ -262,6 +266,12 @@ const initialQuotes = [
 
 const TODAY = new Date();
 
+function formatTodayDate() {
+  const mm = String(TODAY.getMonth() + 1).padStart(2, "0");
+  const dd = String(TODAY.getDate()).padStart(2, "0");
+  return `${mm}/${dd}/${TODAY.getFullYear()}`;
+}
+
 function isWithinLastNDays(dateStr, n) {
   const parsed = parseQuoteDate(dateStr);
   const diffDays = (TODAY - parsed) / (1000 * 60 * 60 * 24);
@@ -330,7 +340,7 @@ function TopHeader({ activePage, onNavigate, employeeName, onSwitchUser }) {
   );
 }
 
-function DashboardPage({ onOpenCustomer, onOpenQuote, onAddNewCustomer, onAddNewQuote, onGoToQuotes, quotes, customers, onPortalOpen, carrierPortalUrls }) {
+function DashboardPage({ onOpenCustomer, onOpenQuote, onAddNewCustomer, onAddNewQuote, onGoToQuotes, quotes, customers, recentlyViewedNames, onPortalOpen, carrierPortalUrls }) {
   const [query, setQuery] = useState("");
   const [dateSort, setDateSort] = useState("desc");
   const results = query.trim() ? customers.filter((c) => customerMatchesQuery(c, query)) : [];
@@ -523,34 +533,44 @@ function DashboardPage({ onOpenCustomer, onOpenQuote, onAddNewCustomer, onAddNew
           <div className="px-4 py-2 text-sm font-bold text-white" style={{ backgroundColor: COLORS.slate }}>
             RECENTLY VIEWED
           </div>
-          {customers.slice(0, 5).map((c, i) => (
-            <button
-              key={c.name}
-              onClick={() => onOpenCustomer(c)}
-              className="w-full text-left px-4 py-3 flex justify-between items-center hover:bg-gray-50"
-              style={{ backgroundColor: i % 2 ? COLORS.lightGray : "white" }}
-            >
-              <span style={{ color: COLORS.charcoal }}>{c.name}</span>
-              <span className="text-xs" style={{ color: COLORS.slate }}>{c.office}</span>
-            </button>
-          ))}
+          {(recentlyViewedNames || [])
+            .map((name) => customers.find((c) => c.name === name))
+            .filter(Boolean)
+            .slice(0, 5)
+            .map((c, i) => (
+              <button
+                key={c.name}
+                onClick={() => onOpenCustomer(c)}
+                className="w-full text-left px-4 py-3 flex justify-between items-center hover:bg-gray-50"
+                style={{ backgroundColor: i % 2 ? COLORS.lightGray : "white" }}
+              >
+                <span style={{ color: COLORS.charcoal }}>{c.name}</span>
+                <span className="text-xs" style={{ color: COLORS.slate }}>{c.office}</span>
+              </button>
+            ))}
+          {(!recentlyViewedNames || recentlyViewedNames.length === 0) && (
+            <p className="text-sm text-center py-6" style={{ color: COLORS.slate }}>No customers viewed yet this session.</p>
+          )}
         </div>
 
         <div className="bg-white border rounded-sm" style={{ borderColor: "#D8DCE1" }}>
           <div className="px-4 py-2 text-sm font-bold text-white" style={{ backgroundColor: COLORS.slate }}>
             RECENTLY ADDED
           </div>
-          {customers.slice(3, 8).map((c, i) => (
-            <button
-              key={c.name}
-              onClick={() => onOpenCustomer(c)}
-              className="w-full text-left px-4 py-3 flex justify-between items-center hover:bg-gray-50"
-              style={{ backgroundColor: i % 2 ? COLORS.lightGray : "white" }}
-            >
-              <span style={{ color: COLORS.charcoal }}>{c.name}</span>
-              <span className="text-xs" style={{ color: COLORS.slate }}>{c.office}</span>
-            </button>
-          ))}
+          {[...customers]
+            .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0))
+            .slice(0, 5)
+            .map((c, i) => (
+              <button
+                key={c.name}
+                onClick={() => onOpenCustomer(c)}
+                className="w-full text-left px-4 py-3 flex justify-between items-center hover:bg-gray-50"
+                style={{ backgroundColor: i % 2 ? COLORS.lightGray : "white" }}
+              >
+                <span style={{ color: COLORS.charcoal }}>{c.name}</span>
+                <span className="text-xs" style={{ color: COLORS.slate }}>{c.office}</span>
+              </button>
+            ))}
         </div>
       </div>
     </div>
@@ -561,7 +581,7 @@ function AddCustomerPage({ onBack, customers, onAddCustomer, onOpenCustomer, def
   const [nameForm, setNameForm] = useState({ firstName: "", lastName: "" });
   const [driverSyncKey, setDriverSyncKey] = useState("");
   const [form, setForm] = useState({ companyName: "", phone: "", email: "", address: "", city: "", state: "", zip: "", office: defaultOffice || "Rampart Office" });
-  const [carrier, setCarrier] = useState("Progressive");
+  const [carrier, setCarrier] = useState("Excellent/Ignition");
   const [policyType, setPolicyType] = useState("Personal Auto");
   const [policyNumber, setPolicyNumber] = useState("");
   const [effectiveDate, setEffectiveDate] = useState("");
@@ -882,6 +902,8 @@ function AddCustomerPage({ onBack, customers, onAddCustomer, onOpenCustomer, def
             onSaveDetails={handleSaveDetails}
             initialDriverName={driverSyncKey}
             showPayment={false}
+            primaryPhone={form.phone}
+            onPrimaryPhoneChange={(v) => updateField("phone", v)}
           />
         )}
 
@@ -923,6 +945,25 @@ function CustomersListPage({ onOpenCustomer, onAddNewCustomer, customers, onPort
     return c[field];
   };
   const { sorted, sortField, sortDir, onSort } = useSortableList(filtered, "name", getSortValue);
+
+  const policyCountForFilter =
+    typeFilter === "All"
+      ? null
+      : sorted.reduce((sum, c) => {
+          let count = 0;
+          if ((c.policyType || "Personal Auto") === typeFilter) count++;
+          count += (c.additionalPolicies || []).filter((p) => p.policyType === typeFilter).length;
+          return sum + count;
+        }, 0);
+  const totalPolicyCountForFilter =
+    typeFilter === "All"
+      ? null
+      : customers.reduce((sum, c) => {
+          let count = 0;
+          if ((c.policyType || "Personal Auto") === typeFilter) count++;
+          count += (c.additionalPolicies || []).filter((p) => p.policyType === typeFilter).length;
+          return sum + count;
+        }, 0);
 
   return (
     <div className="max-w-6xl mx-auto px-6 py-8">
@@ -1013,7 +1054,14 @@ function CustomersListPage({ onOpenCustomer, onAddNewCustomer, customers, onPort
           <p className="text-sm text-center py-6" style={{ color: COLORS.slate }}>No customers match that search.</p>
         )}
       </div>
-      <p className="text-xs mt-3" style={{ color: COLORS.slate }}>Click any row to open that customer's profile.</p>
+      <div className="flex items-center justify-between mt-3">
+        <p className="text-xs" style={{ color: COLORS.slate }}>Click any row to open that customer's profile.</p>
+        <p className="text-xs font-semibold" style={{ color: COLORS.charcoal }}>
+          {typeFilter === "All"
+            ? `${sorted.length} of ${customers.length} customers`
+            : `${policyCountForFilter} of ${totalPolicyCountForFilter} ${typeFilter} ${totalPolicyCountForFilter === 1 ? "policy" : "policies"}`}
+        </p>
+      </div>
     </div>
   );
 }
@@ -1296,7 +1344,7 @@ function QuoteDetailPage({ quote, isNew, onBack, onSaveQuote, onAddRequoteToCust
     zip: quote?.zip || "",
     office: quote?.office || defaultOffice || "Rampart Office",
   });
-  const [carrier, setCarrier] = useState(quote?.carrier || "Progressive");
+  const [carrier, setCarrier] = useState(quote?.carrier || "Excellent/Ignition");
   const [policyType, setPolicyType] = useState(quote?.policyType || "Personal Auto");
   const [quoteNumber, setQuoteNumber] = useState(quote?.quoteNumber || "");
   const [policyAmount, setPolicyAmount] = useState(quote?.policyAmount || "0");
@@ -1308,7 +1356,7 @@ function QuoteDetailPage({ quote, isNew, onBack, onSaveQuote, onAddRequoteToCust
   const [companyOptions, setCompanyOptions] = useState(quote?.companyOptions || []);
 
   const addCompanyOption = () => {
-    setCompanyOptions((prev) => [...prev, { carrier: "Progressive", quoteNumber: "", policyAmount: "0", downPayment: "0" }]);
+    setCompanyOptions((prev) => [...prev, { carrier: "Excellent/Ignition", quoteNumber: "", policyAmount: "0", downPayment: "0" }]);
   };
   const updateCompanyOption = (i, field, value) => {
     setCompanyOptions((prev) => prev.map((o, idx) => (idx === i ? { ...o, [field]: value } : o)));
@@ -1319,9 +1367,7 @@ function QuoteDetailPage({ quote, isNew, onBack, onSaveQuote, onAddRequoteToCust
 
   const VEHICLE_POLICY_TYPES = ["Personal Auto", "Commercial Auto", "Motorcycle"];
   const isVehiclePolicy = VEHICLE_POLICY_TYPES.includes(policyType);
-  const [liveTotal, setLiveTotal] = useState(
-    quote ? (parseFloat(quote.policyAmount) || 0) + (parseFloat(quote.downPayment) || 0) : 0
-  );
+  const liveTotal = (parseFloat(policyAmount) || 0) + (parseFloat(downPayment) || 0);
   const [notes, setNotes] = useState(quote?.notes || []);
   const [noteText, setNoteText] = useState("");
   const [duplicateMatch, setDuplicateMatch] = useState(null);
@@ -1341,12 +1387,9 @@ function QuoteDetailPage({ quote, isNew, onBack, onSaveQuote, onAddRequoteToCust
 
   const driverName = `${nameForm.firstName} ${nameForm.lastName}`.trim();
 
-  const handleSaveDetails = ({ drivers: d, vehicles: v, policyAmount: pa, downPayment: dp, total }) => {
+  const handleSaveDetails = ({ drivers: d, vehicles: v }) => {
     setDrivers(d);
     setVehicles(v);
-    setPolicyAmount(pa);
-    setDownPayment(dp);
-    setLiveTotal(total);
   };
 
   const selectExistingCustomer = (name) => {
@@ -1385,7 +1428,7 @@ function QuoteDetailPage({ quote, isNew, onBack, onSaveQuote, onAddRequoteToCust
       office: form.office,
       policyAmount,
       downPayment,
-      dateQuoted: quote?.dateQuoted || "Today",
+      dateQuoted: quote?.dateQuoted || formatTodayDate(),
       bound: quote?.bound || false,
       existingCustomer,
       notes,
@@ -1487,8 +1530,10 @@ function QuoteDetailPage({ quote, isNew, onBack, onSaveQuote, onAddRequoteToCust
             <div className="text-xs" style={{ color: COLORS.slate }}>
               Policy Payment {formatMoney(policyAmount)} + Down Payment {formatMoney(downPayment)}
             </div>
-            <div className="text-xs font-bold mt-1" style={{ color: COLORS.slate }}>TOTAL</div>
-            <div className="text-xl font-bold" style={{ color: COLORS.blue }}>{formatMoney(liveTotal)}</div>
+            <div className="flex items-baseline justify-end gap-2 mt-1">
+              <span className="text-xs font-bold" style={{ color: COLORS.slate }}>Total Initial Payment</span>
+              <span className="text-xl font-bold" style={{ color: COLORS.blue }}>{formatMoney(liveTotal)}</span>
+            </div>
           </div>
         </div>
 
@@ -1693,6 +1738,9 @@ function QuoteDetailPage({ quote, isNew, onBack, onSaveQuote, onAddRequoteToCust
             initialVehicles={quote?.vehicles || null}
             initialPolicyAmount={quote?.policyAmount || ""}
             initialDownPayment={quote?.downPayment || ""}
+            primaryPhone={form.phone}
+            onPrimaryPhoneChange={(v) => updateField("phone", v)}
+            showPayment={false}
           />
         )}
 
@@ -1817,13 +1865,22 @@ function QuoteDetailPage({ quote, isNew, onBack, onSaveQuote, onAddRequoteToCust
             </div>
           ))}
 
-          <button
-            onClick={() => downloadQuoteComparisonPdf({ driverName: `${nameForm.firstName} ${nameForm.lastName}`.trim(), form, quoteNumber, carrier, policyAmount, downPayment, companyOptions, drivers, vehicles })}
-            className="px-4 py-2 text-sm font-semibold rounded-sm border-2 mt-1"
-            style={{ color: COLORS.blue, borderColor: COLORS.blue, backgroundColor: "white" }}
-          >
-            Download Comparison PDF
-          </button>
+          <div className="flex gap-3 mt-1">
+            <button
+              onClick={() => downloadQuoteComparisonPdf({ driverName: `${nameForm.firstName} ${nameForm.lastName}`.trim(), form, quoteNumber, carrier, policyAmount, downPayment, companyOptions, drivers, vehicles, lang: "es" })}
+              className="px-4 py-2 text-sm font-semibold rounded-sm text-white"
+              style={{ backgroundColor: COLORS.blue }}
+            >
+              Descargar PDF de Comparación (Español)
+            </button>
+            <button
+              onClick={() => downloadQuoteComparisonPdf({ driverName: `${nameForm.firstName} ${nameForm.lastName}`.trim(), form, quoteNumber, carrier, policyAmount, downPayment, companyOptions, drivers, vehicles, lang: "en" })}
+              className="px-4 py-2 text-sm font-semibold rounded-sm border-2"
+              style={{ color: COLORS.blue, borderColor: COLORS.blue, backgroundColor: "white" }}
+            >
+              Download Comparison PDF (English)
+            </button>
+          </div>
         </div>
 
         <div className="mt-6 pt-5 border-t-2" style={{ borderColor: COLORS.blue }}>
@@ -1961,7 +2018,50 @@ function escapeHtml(value) {
   return String(value || "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
 
-function downloadQuoteComparisonPdf({ driverName, form, quoteNumber, carrier, policyAmount, downPayment, companyOptions, drivers, vehicles }) {
+const PDF_TRANSLATIONS = {
+  en: {
+    title: "Quote Comparison",
+    prepared: "Prepared",
+    companyOptions: "Company Options",
+    drivers: "Drivers",
+    vehicles: "Vehicles",
+    company: "Company",
+    quoteNumber: "Quote #",
+    policyAmount: "Policy Amount",
+    applicationFee: "Application Fee",
+    total: "Total",
+    dob: "DOB",
+    license: "License",
+    vin: "VIN",
+    liabilityOnly: "Liability Only",
+    fullCoverage: "Full Coverage",
+    disclaimer: "This is a quote only, not a bound policy. Prices shown are estimates and may vary. This quote is valid for 30 days from the date prepared above.",
+    footer: "Popular Multiservice \u00b7 This comparison is for internal reference and customer presentation purposes.",
+  },
+  es: {
+    title: "Comparaci\u00f3n de Cotizaciones",
+    prepared: "Preparado",
+    companyOptions: "Opciones de Compa\u00f1\u00eda",
+    drivers: "Conductores",
+    vehicles: "Veh\u00edculos",
+    company: "Compa\u00f1\u00eda",
+    quoteNumber: "N\u00famero de Cotizaci\u00f3n",
+    policyAmount: "Monto de la P\u00f3liza",
+    applicationFee: "Fee de Aplicacion",
+    total: "Total",
+    dob: "Fecha de Nac.",
+    license: "Licencia",
+    vin: "VIN",
+    liabilityOnly: "Liability Only",
+    fullCoverage: "Full Coverage",
+    disclaimer: "Esto es solo una cotizaci\u00f3n, no una p\u00f3liza vigente. Los precios mostrados son estimados y pueden variar. Esta cotizaci\u00f3n es v\u00e1lida por 30 d\u00edas a partir de la fecha de preparaci\u00f3n indicada arriba.",
+    footer: "Popular Multiservice \u00b7 Esta comparaci\u00f3n es para referencia interna y fines de presentaci\u00f3n al cliente.",
+  },
+};
+
+function downloadQuoteComparisonPdf({ driverName, form, quoteNumber, carrier, policyAmount, downPayment, companyOptions, drivers, vehicles, lang = "es" }) {
+  const t = PDF_TRANSLATIONS[lang] || PDF_TRANSLATIONS.es;
+  const officeInfo = OFFICE_CONTACT_INFO[form.office] || null;
   const rows = [
     { carrier, quoteNumber, policyAmount, downPayment },
     ...(companyOptions || []),
@@ -1983,7 +2083,7 @@ function downloadQuoteComparisonPdf({ driverName, form, quoteNumber, carrier, po
     .filter((d) => d && (d.name || d.firstName))
     .map((d, i) => {
       const dName = d.name || `${d.firstName || ""} ${d.lastName || ""}`.trim();
-      const details = [d.dob && `DOB: ${escapeHtml(d.dob)}`, d.license && `License: ${escapeHtml(d.license)}`]
+      const details = [d.dob && `${t.dob}: ${escapeHtml(d.dob)}`, d.license && `${t.license}: ${escapeHtml(d.license)}`]
         .filter(Boolean)
         .join(" &middot; ");
       return `<div class="person-row"><span class="person-index">${i + 1}</span><span class="person-name">${escapeHtml(dName)}</span>${details ? `<span class="person-details">${details}</span>` : ""}</div>`;
@@ -1995,8 +2095,9 @@ function downloadQuoteComparisonPdf({ driverName, form, quoteNumber, carrier, po
     .map((v, i) => {
       const vName = [v.year, v.make, v.model].filter(Boolean).join(" ");
       const isLiability = (v.coverage || "Liability Only") === "Liability Only";
-      const badge = `<span class="badge ${isLiability ? "badge-liability" : "badge-full"}">${escapeHtml(v.coverage || "Liability Only")}</span>`;
-      return `<div class="person-row"><span class="person-index">${i + 1}</span><span class="person-name">${escapeHtml(vName || "Vehicle")}</span>${badge}${v.vin ? `<span class="person-details">VIN: ${escapeHtml(v.vin)}</span>` : ""}</div>`;
+      const coverageLabel = isLiability ? t.liabilityOnly : t.fullCoverage;
+      const badge = `<span class="badge ${isLiability ? "badge-liability" : "badge-full"}">${escapeHtml(coverageLabel)}</span>`;
+      return `<div class="person-row"><span class="person-index">${i + 1}</span><span class="person-name">${escapeHtml(vName || "Vehicle")}</span>${badge}${v.vin ? `<span class="person-details">${t.vin}: ${escapeHtml(v.vin)}</span>` : ""}</div>`;
     })
     .join("");
 
@@ -2004,12 +2105,14 @@ function downloadQuoteComparisonPdf({ driverName, form, quoteNumber, carrier, po
 <html>
 <head>
 <meta charset="utf-8" />
-<title>Quote Comparison - ${escapeHtml(driverName)}</title>
+<title>${escapeHtml(t.title)} - ${escapeHtml(driverName)}</title>
 <style>
   * { box-sizing: border-box; }
   body { font-family: Arial, Helvetica, sans-serif; color: #4A4A4A; padding: 0; margin: 0; }
   .header { display: flex; align-items: center; justify-content: space-between; padding: 28px 36px 20px; border-bottom: 4px solid #1768A5; }
+  .header .logo-block { display: flex; flex-direction: column; align-items: flex-start; }
   .header img { height: 52px; }
+  .header .office-line { margin-top: 6px; font-size: 11px; color: #4D6278; white-space: nowrap; }
   .header .title { text-align: right; }
   .header .title h1 { font-size: 20px; margin: 0; color: #384353; }
   .header .title p { margin: 2px 0 0; font-size: 12px; color: #4D6278; }
@@ -2038,32 +2141,36 @@ function downloadQuoteComparisonPdf({ driverName, form, quoteNumber, carrier, po
 </head>
 <body>
   <div class="header">
-    <img src="${FULL_LOGO_SRC}" alt="Popular Multiservice" />
+    <div class="logo-block">
+      <img src="${FULL_LOGO_SRC}" alt="Popular Multiservice" />
+      ${officeInfo ? `<div class="office-line">${escapeHtml(form.office)} &middot; ${escapeHtml(officeInfo.address)} &middot; ${escapeHtml(officeInfo.phone)}</div>` : ""}
+    </div>
     <div class="title">
-      <h1>Quote Comparison</h1>
-      <p>Prepared ${escapeHtml(new Date().toLocaleDateString())}</p>
+      <h1>${escapeHtml(t.title)}</h1>
+      <p>${escapeHtml(t.prepared)} ${escapeHtml(new Date().toLocaleDateString())}</p>
     </div>
   </div>
   <div class="content">
     <div class="customer-block">
       <h2>${escapeHtml(driverName)}</h2>
-      <p>${escapeHtml(form.phone)} &middot; ${escapeHtml(form.office)}</p>
+      <p>${escapeHtml(form.phone)}</p>
+      ${formatAddress(form) ? `<p>${escapeHtml(formatAddress(form))}</p>` : ""}
     </div>
 
-    <h3 class="section-title">Company Options</h3>
+    <h3 class="section-title">${escapeHtml(t.companyOptions)}</h3>
     <table>
       <thead>
-        <tr><th>Company</th><th>Quote #</th><th>Policy Amount</th><th>Application Fee</th><th>Total</th></tr>
+        <tr><th>${escapeHtml(t.company)}</th><th>${escapeHtml(t.quoteNumber)}</th><th>${escapeHtml(t.policyAmount)}</th><th>${escapeHtml(t.applicationFee)}</th><th>${escapeHtml(t.total)}</th></tr>
       </thead>
       <tbody>${rowsHtml}</tbody>
     </table>
 
-    ${driversHtml ? `<h3 class="section-title">Drivers</h3>${driversHtml}` : ""}
-    ${vehiclesHtml ? `<h3 class="section-title">Vehicles</h3>${vehiclesHtml}` : ""}
+    ${driversHtml ? `<h3 class="section-title">${escapeHtml(t.drivers)}</h3>${driversHtml}` : ""}
+    ${vehiclesHtml ? `<h3 class="section-title">${escapeHtml(t.vehicles)}</h3>${vehiclesHtml}` : ""}
 
-    <div class="disclaimer">This is a quote only, not a bound policy. Prices shown are estimates and may vary. This quote is valid for 30 days from the date prepared above.</div>
+    <div class="disclaimer">${escapeHtml(t.disclaimer)}</div>
 
-    <div class="footer">Popular Multiservice &middot; This comparison is for internal reference and customer presentation purposes.</div>
+    <div class="footer">${escapeHtml(t.footer)}</div>
   </div>
 </body>
 </html>`;
@@ -2110,6 +2217,7 @@ const blankDriver = () => ({
   maritalStatus: "",
   relation: "",
   status: "Included",
+  phone: "",
 });
 
 const blankVehicle = () => ({ vin: "", year: "", make: "", model: "", coverage: "Liability Only" });
@@ -2151,16 +2259,18 @@ function AdditionalInfoSection({
   initialPolicyAmount = "",
   initialDownPayment = "",
   showPayment = true,
+  primaryPhone = "",
+  onPrimaryPhoneChange,
 }) {
   const startsLocked = lockable && startLocked;
   const useSeedSample = startsLocked && !initialDrivers;
   const [isEditing, setIsEditing] = useState(!startsLocked);
   const [drivers, setDrivers] = useState(
     useSeedSample
-      ? [{ firstName: "Maria", lastName: "Rodriguez", dob: "04/12/1985", idNumber: "TX-40218855", sex: "Female", maritalStatus: "Married", relation: "Self", status: "Included" }]
+      ? [{ firstName: "Maria", lastName: "Rodriguez", dob: "04/12/1985", idNumber: "TX-40218855", sex: "Female", maritalStatus: "Married", relation: "Self", status: "Included", phone: "" }]
       : initialDrivers && initialDrivers.length
-      ? initialDrivers
-      : [{ ...blankDriver(), firstName: initialDriverName.split(" ")[0] || "", lastName: initialDriverName.split(" ").slice(1).join(" ") }]
+      ? initialDrivers.map((d, i) => (i === 0 && !d.phone && primaryPhone ? { ...d, phone: primaryPhone } : d))
+      : [{ ...blankDriver(), firstName: initialDriverName.split(" ")[0] || "", lastName: initialDriverName.split(" ").slice(1).join(" "), phone: primaryPhone }]
   );
   const [vehicles, setVehicles] = useState(
     useSeedSample
@@ -2181,6 +2291,7 @@ function AdditionalInfoSection({
     let v = value;
     if (field === "firstName" || field === "lastName") v = toTitleCase(v);
     setDrivers((prev) => prev.map((d, idx) => (idx === i ? { ...d, [field]: v } : d)));
+    if (i === 0 && field === "phone" && onPrimaryPhoneChange) onPrimaryPhoneChange(v);
   };
 
   const addDriver = () => setDrivers((prev) => [...prev, blankDriver()]);
@@ -2288,6 +2399,10 @@ function AdditionalInfoSection({
                 <div>
                   <span className="text-xs block" style={{ color: COLORS.slate }}>Marital Status</span>
                   {d.maritalStatus || "-"}
+                </div>
+                <div>
+                  <span className="text-xs block" style={{ color: COLORS.slate }}>Phone</span>
+                  {d.phone || "-"}
                 </div>
               </div>
             </div>
@@ -2430,6 +2545,19 @@ function AdditionalInfoSection({
                         <option>Divorced</option>
                         <option>Widowed</option>
                       </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold mb-1" style={{ color: COLORS.charcoal }}>
+                        Phone <span className="font-normal" style={{ color: COLORS.slate }}>(optional)</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={d.phone || ""}
+                        onChange={(e) => updateDriver(i, "phone", formatPhoneInput(e.target.value))}
+                        placeholder="Phone number"
+                        className="w-full border rounded-sm px-3 py-2 text-sm outline-none bg-white"
+                        style={{ borderColor: "#D8DCE1", color: COLORS.charcoal }}
+                      />
                     </div>
                     <div>
                       <label className="block text-xs font-semibold mb-1" style={{ color: COLORS.charcoal }}>
@@ -2720,10 +2848,10 @@ const policyHistorySample = [
   { startDate: "07/28/2026", endDate: "Present", carrier: "Progressive", policyNumber: "123456", type: "Personal Auto", reason: "Requote accepted - current policy" },
 ];
 
-function PolicyDetailView({ policy, employeeName, carrierPortalUrls, customerId, onSave, onRemove, onBack }) {
+function PolicyDetailView({ policy, employeeName, carrierPortalUrls, customerId, customerPhone, onSave, onRemove, onBack }) {
   const [subTab, setSubTab] = useState("Overview");
   const [policyType, setPolicyType] = useState(policy.policyType || "Personal Auto");
-  const [carrier, setCarrier] = useState(policy.carrier || "Progressive");
+  const [carrier, setCarrier] = useState(policy.carrier || "Excellent/Ignition");
   const [policyNumber, setPolicyNumber] = useState(policy.policyNumber || "");
   const [effectiveDate, setEffectiveDate] = useState(policy.effectiveDate || "");
   const [expiryDate, setExpiryDate] = useState(policy.expiryDate || "");
@@ -2733,7 +2861,7 @@ function PolicyDetailView({ policy, employeeName, carrierPortalUrls, customerId,
   const [docCategory, setDocCategory] = useState("Declaration Page");
   const [requotes, setRequotes] = useState(policy.requotes || []);
   const [showAddRequote, setShowAddRequote] = useState(false);
-  const [newRequote, setNewRequote] = useState({ driverName: "", carrier: "Progressive", quoteNumber: "", vehicleDescription: "", policyAmount: "", downPayment: "", dateQuoted: "" });
+  const [newRequote, setNewRequote] = useState({ driverName: "", carrier: "Excellent/Ignition", quoteNumber: "", vehicleDescription: "", policyAmount: "", downPayment: "", dateQuoted: "" });
   const [policyHistoryLog, setPolicyHistoryLog] = useState(policy.policyHistoryLog || []);
   const [activityLog, setActivityLog] = useState(policy.activityLog || []);
   const [confirmRemove, setConfirmRemove] = useState(false);
@@ -2826,14 +2954,14 @@ function PolicyDetailView({ policy, employeeName, carrierPortalUrls, customerId,
   const saveManualRequote = () => {
     if (isBlank(newRequote.driverName) || isBlank(newRequote.quoteNumber) || isBlank(newRequote.policyAmount)) return;
     const updatedRequotes = [
-      { ...newRequote, dateQuoted: newRequote.dateQuoted || "Today" },
+      { ...newRequote, dateQuoted: newRequote.dateQuoted || formatTodayDate() },
       ...requotes,
     ];
     setRequotes(updatedRequotes);
     const activityEntry = logActivity("Added requote", `${newRequote.carrier} - Quote #${newRequote.quoteNumber}`);
     onSave({ policyType, carrier, policyNumber, insuredName, otherDetails, documents, requotes: updatedRequotes, policyHistoryLog, activityLog: [activityEntry, ...activityLog] });
     setShowAddRequote(false);
-    setNewRequote({ driverName: "", carrier: "Progressive", quoteNumber: "", vehicleDescription: "", policyAmount: "", downPayment: "", dateQuoted: "" });
+    setNewRequote({ driverName: "", carrier: "Excellent/Ignition", quoteNumber: "", vehicleDescription: "", policyAmount: "", downPayment: "", dateQuoted: "" });
   };
 
   const POLICY_TABS = ["Overview", "Requote", "Policy History", "Documents", "Activity"];
@@ -2947,6 +3075,7 @@ function PolicyDetailView({ policy, employeeName, carrierPortalUrls, customerId,
               initialVehicles={policy.vehicles || null}
               initialPolicyAmount={policy.policyAmount || ""}
               initialDownPayment={policy.downPayment || ""}
+              primaryPhone={customerPhone || ""}
               onSaveDetails={({ drivers, vehicles, policyAmount, downPayment }) =>
                 saveFields({ driverDetails: drivers, vehicles, policyAmount, downPayment })
               }
@@ -3362,7 +3491,7 @@ function CustomerProfilePage({ customer, onPortalOpen, employeeName, onDeleteCus
   const [newRequote, setNewRequote] = useState({
     driverFirstName: "",
     driverLastName: "",
-    carrier: "Progressive",
+    carrier: "Excellent/Ignition",
     quoteNumber: "",
     policyType: "Personal Auto",
     vehicleDescription: "",
@@ -3475,7 +3604,7 @@ function CustomerProfilePage({ customer, onPortalOpen, employeeName, onDeleteCus
         vehicles: [{ description: newRequote.vehicleDescription || "Not specified" }],
         policyAmount: newRequote.policyAmount,
         downPayment: newRequote.downPayment || "0",
-        dateQuoted: newRequote.dateQuoted || "Today",
+        dateQuoted: newRequote.dateQuoted || formatTodayDate(),
       },
       ...prev,
     ]);
@@ -3484,7 +3613,7 @@ function CustomerProfilePage({ customer, onPortalOpen, employeeName, onDeleteCus
       ...prev,
     ]);
     setShowAddRequote(false);
-    setNewRequote({ driverFirstName: "", driverLastName: "", carrier: "Progressive", quoteNumber: "", policyType: "Personal Auto", vehicleDescription: "", policyAmount: "", downPayment: "", dateQuoted: "" });
+    setNewRequote({ driverFirstName: "", driverLastName: "", carrier: "Excellent/Ignition", quoteNumber: "", policyType: "Personal Auto", vehicleDescription: "", policyAmount: "", downPayment: "", dateQuoted: "" });
   };
 
   const donePolicyNumber = () => {
@@ -4075,7 +4204,7 @@ function CustomerProfilePage({ customer, onPortalOpen, employeeName, onDeleteCus
 
       <button
         onClick={() => {
-          const updated = [...(customer.additionalPolicies || []), { policyType: "Personal Auto", carrier: "Progressive", policyNumber: "" }];
+          const updated = [...(customer.additionalPolicies || []), { policyType: "Personal Auto", carrier: "Excellent/Ignition", policyNumber: "" }];
           if (onUpdateCustomer) onUpdateCustomer(customer.name, { additionalPolicies: updated });
           setActivityLog((prev) => [
             { when: "Just now", employee: employeeName || "Unknown", action: "Added policy", detail: "Added a policy" },
@@ -4096,6 +4225,7 @@ function CustomerProfilePage({ customer, onPortalOpen, employeeName, onDeleteCus
           employeeName={employeeName}
           carrierPortalUrls={carrierPortalUrls}
           customerId={customer.id}
+          customerPhone={customer.phone}
           onBack={() => setSelectedPolicyIndex(null)}
           onSave={(patch) => {
             const updated = (customer.additionalPolicies || []).map((p, idx) => (idx === selectedPolicyIndex ? { ...p, ...patch } : p));
@@ -4148,6 +4278,11 @@ function CustomerProfilePage({ customer, onPortalOpen, employeeName, onDeleteCus
               initialVehicles={customer.vehicles || null}
               initialPolicyAmount={customer.policyAmount || ""}
               initialDownPayment={customer.downPayment || ""}
+              primaryPhone={customer.phone || ""}
+              onPrimaryPhoneChange={(v) => {
+                updateCustomerField("phone", v);
+                if (onUpdateCustomer) onUpdateCustomer(customer.name, { phone: v });
+              }}
               onSaveDetails={({ drivers, vehicles, policyAmount, downPayment }) => {
                 const searchableDrivers = drivers && drivers.length
                   ? drivers.map((d, i) => ({
@@ -5531,6 +5666,44 @@ export default function App() {
   const selectedCustomer = customers.find((c) => c.name === selectedCustomerName) || null;
   const [selectedQuote, setSelectedQuote] = useState(null);
   const [isNewQuote, setIsNewQuote] = useState(false);
+  const [recentlyViewedNames, setRecentlyViewedNames] = useState(() => {
+    try {
+      const stored = localStorage.getItem("policyhub_recently_viewed");
+      return stored ? JSON.parse(stored) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  // Wire the browser's Back/Forward buttons to in-app navigation instead of
+  // leaving the site entirely. Every navigational change pushes a history
+  // entry; popstate restores state without pushing again (avoids a loop).
+  useEffect(() => {
+    window.history.replaceState({ page: "Dashboard", selectedCustomerName: null, selectedQuote: null, isNewQuote: false }, "");
+    const handlePopState = (e) => {
+      const s = e.state || { page: "Dashboard", selectedCustomerName: null, selectedQuote: null, isNewQuote: false };
+      setPage(s.page);
+      setSelectedCustomerName(s.selectedCustomerName || null);
+      setSelectedQuote(s.selectedQuote || null);
+      setIsNewQuote(!!s.isNewQuote);
+    };
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
+
+  const pushNav = (updates) => {
+    const next = {
+      page: "page" in updates ? updates.page : page,
+      selectedCustomerName: "selectedCustomerName" in updates ? updates.selectedCustomerName : selectedCustomerName,
+      selectedQuote: "selectedQuote" in updates ? updates.selectedQuote : selectedQuote,
+      isNewQuote: "isNewQuote" in updates ? updates.isNewQuote : isNewQuote,
+    };
+    if ("page" in updates) setPage(next.page);
+    if ("selectedCustomerName" in updates) setSelectedCustomerName(next.selectedCustomerName);
+    if ("selectedQuote" in updates) setSelectedQuote(next.selectedQuote);
+    if ("isNewQuote" in updates) setIsNewQuote(next.isNewQuote);
+    window.history.pushState(next, "");
+  };
   const [adminUnlocked, setAdminUnlocked] = useState(false);
   const [quotes, setQuotes] = useState([]);
   const [quotesLoading, setQuotesLoading] = useState(true);
@@ -5576,20 +5749,22 @@ export default function App() {
   };
 
   const openCustomer = (customer) => {
-    setSelectedCustomerName(customer.name);
-    setPage("Customer");
+    setRecentlyViewedNames((prev) => {
+      const next = [customer.name, ...prev.filter((n) => n !== customer.name)].slice(0, 10);
+      try {
+        localStorage.setItem("policyhub_recently_viewed", JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+    pushNav({ page: "Customer", selectedCustomerName: customer.name });
   };
 
   const openQuote = (quote) => {
-    setSelectedQuote(quote);
-    setIsNewQuote(false);
-    setPage("QuoteDetail");
+    pushNav({ page: "QuoteDetail", selectedQuote: quote, isNewQuote: false });
   };
 
   const addNewQuote = () => {
-    setSelectedQuote(null);
-    setIsNewQuote(true);
-    setPage("QuoteDetail");
+    pushNav({ page: "QuoteDetail", selectedQuote: null, isNewQuote: true });
   };
 
   const saveQuoteRecord = async (record, originalQuoteNumber, quoteId) => {
@@ -5623,14 +5798,14 @@ export default function App() {
     const ok = await deleteCustomerById(customer.id);
     if (!ok) return;
     setCustomers((prev) => prev.filter((c) => c.id !== customer.id));
-    setPage("CustomersList");
+    pushNav({ page: "CustomersList" });
   };
 
   const deleteQuote = async (quote) => {
     const ok = await deleteQuoteById(quote.id);
     if (!ok) return;
     setQuotes((prev) => prev.filter((q) => q.id !== quote.id));
-    setPage("QuotesList");
+    pushNav({ page: "QuotesList" });
   };
 
   const acceptQuote = async (quote) => {
@@ -5672,11 +5847,11 @@ export default function App() {
 
   const handleNavigate = (item) => {
     if (item === "Customers") {
-      setPage("CustomersList");
+      pushNav({ page: "CustomersList" });
     } else if (item === "Quotes") {
-      setPage("QuotesList");
+      pushNav({ page: "QuotesList" });
     } else {
-      setPage(item);
+      pushNav({ page: item });
     }
   };
 
@@ -5722,11 +5897,12 @@ export default function App() {
         <DashboardPage
           onOpenCustomer={openCustomer}
           onOpenQuote={openQuote}
-          onAddNewCustomer={() => setPage("AddCustomer")}
+          onAddNewCustomer={() => pushNav({ page: "AddCustomer" })}
           onAddNewQuote={addNewQuote}
-          onGoToQuotes={() => setPage("QuotesList")}
+          onGoToQuotes={() => pushNav({ page: "QuotesList" })}
           quotes={quotes}
           customers={customers}
+          recentlyViewedNames={recentlyViewedNames}
           onPortalOpen={markCustomerActive}
           carrierPortalUrls={carrierPortalUrls}
         />
@@ -5734,7 +5910,7 @@ export default function App() {
       {page === "CustomersList" && (
         <CustomersListPage
           onOpenCustomer={openCustomer}
-          onAddNewCustomer={() => setPage("AddCustomer")}
+          onAddNewCustomer={() => pushNav({ page: "AddCustomer" })}
           customers={customers}
           onPortalOpen={markCustomerActive}
           carrierPortalUrls={carrierPortalUrls}
@@ -5742,7 +5918,7 @@ export default function App() {
       )}
       {page === "AddCustomer" && (
         <AddCustomerPage
-          onBack={() => setPage("CustomersList")}
+          onBack={() => pushNav({ page: "CustomersList" })}
           customers={customers}
           onAddCustomer={addCustomer}
           onOpenCustomer={openCustomer}
@@ -5775,7 +5951,7 @@ export default function App() {
         <QuoteDetailPage
           quote={selectedQuote}
           isNew={isNewQuote}
-          onBack={() => setPage("QuotesList")}
+          onBack={() => pushNav({ page: "QuotesList" })}
           onSaveQuote={saveQuoteRecord}
           onAddRequoteToCustomer={addRequoteToCustomer}
           customers={customers}
