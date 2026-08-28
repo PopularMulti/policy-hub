@@ -1441,7 +1441,7 @@ function QuoteDetailPage({ quote, isNew, onBack, onSaveQuote, onAddRequoteToCust
         quoteIdRef.current = saved.id;
         setSaveError("");
       } else {
-        setSaveError("Save failed \u2014 this quote couldn't be found in the database. Check the browser console for details, or contact support before making further changes here.");
+        setSaveError("Save failed \u2014 check the browser console (F12) for the exact error. Your changes are only saved in this browser tab right now, not in the database.");
       }
     }
     if (existingCustomer && targetCustomerName && onAddRequoteToCustomer) {
@@ -1472,7 +1472,7 @@ function QuoteDetailPage({ quote, isNew, onBack, onSaveQuote, onAddRequoteToCust
         if (saved?.id) {
           setSaveError("");
         } else {
-          setSaveError("This company option didn't save \u2014 the quote couldn't be found in the database. Check the browser console for details, or contact support before making further changes here.");
+          setSaveError("This company option didn't save \u2014 check the browser console (F12) for the exact error. Your change is only saved in this browser tab right now, not in the database.");
         }
       });
     }

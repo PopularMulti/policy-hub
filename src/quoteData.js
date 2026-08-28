@@ -71,12 +71,16 @@ export async function fetchQuotes() {
 
 export async function insertQuote(quote) {
   const row = quoteToRow(quote);
-  const { data, error } = await supabase.from("quotes").insert(row).select().single();
+  const { data, error } = await supabase.from("quotes").insert(row).select();
   if (error) {
     console.error("insertQuote failed:", error.message);
     return null;
   }
-  return rowToQuote(data);
+  if (!data || data.length === 0) {
+    console.error("insertQuote: insert reported success but returned no row. This usually means a Row Level Security policy is blocking the read-back.");
+    return null;
+  }
+  return rowToQuote(data[0]);
 }
 
 export async function updateQuoteById(id, patch) {
