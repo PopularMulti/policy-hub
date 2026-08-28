@@ -291,6 +291,24 @@ function sortByDate(list, order) {
   return order === "asc" ? sorted : sorted.reverse();
 }
 
+function isPolicyActive(expiryDateStr) {
+  // No expiry date on file is treated as active (benefit of the doubt for
+  // incomplete data entry), rather than silently excluding real customers.
+  if (!expiryDateStr) return true;
+  const parts = expiryDateStr.split("/").map(Number);
+  if (parts.length !== 3 || parts.some(isNaN)) return true;
+  const [month, day, year] = parts;
+  const expiry = new Date(year, month - 1, day);
+  const todayMidnight = new Date(TODAY.getFullYear(), TODAY.getMonth(), TODAY.getDate());
+  return expiry >= todayMidnight;
+}
+
+function customerHasActivePolicy(c) {
+  const hasPrimary = !!(c.carrier || c.policyNumber);
+  if (hasPrimary && isPolicyActive(c.expiryDate)) return true;
+  return (c.additionalPolicies || []).some((p) => isPolicyActive(p.expiryDate));
+}
+
 function findCustomerForDriver(customersList, driverName) {
   return customersList.find(
     (c) => c.name === driverName || (c.drivers || []).some((d) => d.name === driverName)
@@ -406,7 +424,7 @@ function DashboardPage({ onOpenCustomer, onOpenQuote, onAddNewCustomer, onAddNew
             ACTIVE CUSTOMERS
           </div>
           <div className="text-3xl font-bold mt-1" style={{ color: COLORS.slate }}>
-            {customers.filter((c) => c.active).length.toLocaleString()}
+            {customers.filter(customerHasActivePolicy).length.toLocaleString()}
           </div>
         </div>
         <button
