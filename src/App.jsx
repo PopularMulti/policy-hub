@@ -1372,6 +1372,7 @@ function QuoteDetailPage({ quote, isNew, onBack, onSaveQuote, onAddRequoteToCust
   const [noteText, setNoteText] = useState("");
   const [duplicateMatch, setDuplicateMatch] = useState(null);
   const [savedMessage, setSavedMessage] = useState("");
+  const [saveError, setSaveError] = useState("");
   const originalQuoteNumber = React.useRef(quote?.quoteNumber || null);
   const quoteIdRef = React.useRef(quote?.id || null);
 
@@ -1436,7 +1437,12 @@ function QuoteDetailPage({ quote, isNew, onBack, onSaveQuote, onAddRequoteToCust
     };
     if (onSaveQuote) {
       const saved = await onSaveQuote(record, originalQuoteNumber.current, quoteIdRef.current);
-      if (saved?.id) quoteIdRef.current = saved.id;
+      if (saved?.id) {
+        quoteIdRef.current = saved.id;
+        setSaveError("");
+      } else {
+        setSaveError("Save failed \u2014 this quote couldn't be found in the database. Check the browser console for details, or contact support before making further changes here.");
+      }
     }
     if (existingCustomer && targetCustomerName && onAddRequoteToCustomer) {
       onAddRequoteToCustomer(targetCustomerName, {
@@ -1462,7 +1468,13 @@ function QuoteDetailPage({ quote, isNew, onBack, onSaveQuote, onAddRequoteToCust
     // Only auto-save for a quote that's already been saved once (has an id).
     // A brand-new, not-yet-saved quote still requires the initial SAVE QUOTE click.
     if (quoteIdRef.current && onSaveQuote) {
-      onSaveQuote({ companyOptions }, originalQuoteNumber.current, quoteIdRef.current);
+      onSaveQuote({ companyOptions }, originalQuoteNumber.current, quoteIdRef.current).then((saved) => {
+        if (saved?.id) {
+          setSaveError("");
+        } else {
+          setSaveError("This company option didn't save \u2014 the quote couldn't be found in the database. Check the browser console for details, or contact support before making further changes here.");
+        }
+      });
     }
   }, [companyOptions]);
 
@@ -1521,6 +1533,11 @@ function QuoteDetailPage({ quote, isNew, onBack, onSaveQuote, onAddRequoteToCust
       <button onClick={onBack} className="text-sm font-semibold mb-4" style={{ color: COLORS.blue }}>
         {"\u2190 Back to Quotes"}
       </button>
+      {saveError && (
+        <div className="mb-4 p-3 border-2 rounded-sm text-sm font-semibold" style={{ borderColor: COLORS.red, backgroundColor: "#FBE7E7", color: COLORS.red }}>
+          {saveError}
+        </div>
+      )}
       <div className="bg-white border rounded-sm p-5" style={{ borderColor: "#D8DCE1", borderLeft: `4px solid ${COLORS.blue}` }}>
         <div className="flex items-start justify-between mb-4">
           <h1 className="text-xl font-bold" style={{ color: COLORS.charcoal }}>

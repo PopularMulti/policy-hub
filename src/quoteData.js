@@ -17,6 +17,7 @@ function rowToQuote(row) {
     carrier: row.carrier || "",
     policyType: row.policy_type || "Personal Auto",
     insuredName: row.insured_name || "",
+    companyOptions: row.company_options || [],
     otherDetails: row.other_details || "",
     policyAmount: row.policy_amount || "",
     downPayment: row.down_payment || "",
@@ -45,6 +46,7 @@ function quoteToRow(quote) {
   if ("carrier" in quote) row.carrier = quote.carrier;
   if ("policyType" in quote) row.policy_type = quote.policyType;
   if ("insuredName" in quote) row.insured_name = quote.insuredName;
+  if ("companyOptions" in quote) row.company_options = quote.companyOptions;
   if ("otherDetails" in quote) row.other_details = quote.otherDetails;
   if ("policyAmount" in quote) row.policy_amount = quote.policyAmount;
   if ("downPayment" in quote) row.down_payment = quote.downPayment;
@@ -79,12 +81,18 @@ export async function insertQuote(quote) {
 
 export async function updateQuoteById(id, patch) {
   const row = quoteToRow(patch);
-  const { data, error } = await supabase.from("quotes").update(row).eq("id", id).select().single();
+  const { data, error } = await supabase.from("quotes").update(row).eq("id", id).select();
   if (error) {
     console.error("updateQuoteById failed:", error.message);
     return null;
   }
-  return rowToQuote(data);
+  if (!data || data.length === 0) {
+    console.error(
+      `updateQuoteById: no quote row matched id ${id}. Either it was deleted, or a Row Level Security policy on the "quotes" table is blocking the read-back after update.`
+    );
+    return null;
+  }
+  return rowToQuote(data[0]);
 }
 
 export async function deleteQuoteById(id) {
