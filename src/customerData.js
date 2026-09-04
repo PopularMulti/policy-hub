@@ -8,6 +8,7 @@ function rowToCustomer(row) {
   return {
     id: row.id,
     name: row.name,
+    middleName: row.middle_name || "",
     companyName: row.company_name || "",
     phone: row.phone || "",
     email: row.email || "",
@@ -29,6 +30,7 @@ function rowToCustomer(row) {
     driverDetails: row.driver_details || [],
     drivers: row.drivers || [],
     vehicles: row.vehicles || [],
+    propertyInfo: row.property_info || {},
     documents: row.documents || [],
     notes: row.notes || [],
     policyHistory: row.policy_history || [],
@@ -48,6 +50,7 @@ function rowToCustomer(row) {
 function customerToRow(customer) {
   const row = {};
   if ("name" in customer) row.name = customer.name;
+  if ("middleName" in customer) row.middle_name = customer.middleName;
   if ("companyName" in customer) row.company_name = customer.companyName;
   if ("phone" in customer) row.phone = customer.phone;
   if ("email" in customer) row.email = customer.email;
@@ -69,6 +72,7 @@ function customerToRow(customer) {
   if ("driverDetails" in customer) row.driver_details = customer.driverDetails;
   if ("drivers" in customer) row.drivers = customer.drivers;
   if ("vehicles" in customer) row.vehicles = customer.vehicles;
+  if ("propertyInfo" in customer) row.property_info = customer.propertyInfo;
   if ("documents" in customer) row.documents = customer.documents;
   if ("notes" in customer) row.notes = customer.notes;
   if ("policyHistory" in customer) row.policy_history = customer.policyHistory;
