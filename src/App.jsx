@@ -2307,6 +2307,15 @@ function escapeHtml(value) {
   return String(value || "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
 
+// For text embedded in a CSS content: "..." string (e.g. the @page print
+// footer below) rather than HTML markup - CSS strings don't understand HTML
+// entities like &amp;, so escapeHtml() would make "&" show up literally as
+// the text "&amp;" on the page. Only backslash and the enclosing quote character
+// need escaping here.
+function escapeCssString(value) {
+  return String(value || "").replace(/[\\"]/g, (c) => `\\${c}`);
+}
+
 const PDF_TRANSLATIONS = {
   en: {
     title: "Quote Comparison",
@@ -6985,7 +6994,7 @@ function InvoiceClientProfilePage({ client, invoices, onBack, onUpdateClient, on
   );
 }
 
-function printInvoice({ client, docType, invoiceNumber, issueDate, dueDate, billToName, billToEmail, billToAddress, lineItems, taxRate, notes, pricingMode, manualTotal, payments }) {
+function printInvoice({ client, docType, invoiceNumber, issueDate, dueDate, billToName, billToEmail, billToPhone, billToAddress, lineItems, taxRate, notes, pricingMode, manualTotal, payments }) {
   const label = docType === "Proposal" ? "Proposal" : "Invoice";
   const logoUrl = getLogoUrl(client?.logoPath);
   const isSimple = pricingMode === "simple";
@@ -7092,7 +7101,7 @@ function printInvoice({ client, docType, invoiceNumber, issueDate, dueDate, bill
   @page {
     margin: 0.4in 0.4in 0.65in 0.4in;
     @bottom-center {
-      content: "${escapeHtml(client?.businessName || "")} \u00b7 ${label} ${escapeHtml(invoiceNumber || "")} \u2014 Page " counter(page) " of " counter(pages);
+      content: "${escapeCssString(client?.businessName || "")} \u00b7 ${label} ${escapeCssString(invoiceNumber || "")} \u2014 Page " counter(page) " of " counter(pages);
       font-size: 9px;
       color: #999999;
     }
@@ -7121,6 +7130,7 @@ function printInvoice({ client, docType, invoiceNumber, issueDate, dueDate, bill
         ${billToName ? `<p>${escapeHtml(billToName)}</p>` : ""}
         ${billToAddress ? `<p>${escapeHtml(billToAddress)}</p>` : ""}
         ${billToEmail ? `<p>${escapeHtml(billToEmail)}</p>` : ""}
+        ${billToPhone ? `<p>${escapeHtml(billToPhone)}</p>` : ""}
       </div>
       <div class="invoice-facts">
         ${issueDate ? `<div><span class="label">Date:</span><span class="value">${escapeHtml(issueDate)}</span></div>` : ""}
@@ -7184,6 +7194,7 @@ function InvoiceEditorPage({ invoice, isNew, client, onBack, onAddInvoice, onUpd
   const [dueDate, setDueDate] = useState(invoice?.dueDate || "");
   const [billToName, setBillToName] = useState(invoice?.billToName || "");
   const [billToEmail, setBillToEmail] = useState(invoice?.billToEmail || "");
+  const [billToPhone, setBillToPhone] = useState(invoice?.billToPhone || "");
   const [billToAddress, setBillToAddress] = useState(invoice?.billToAddress || "");
   const [lineItems, setLineItems] = useState(invoice?.lineItems?.length ? invoice.lineItems : [blankLineItem()]);
   const [pricingMode, setPricingMode] = useState(invoice?.pricingMode || "itemized");
@@ -7269,6 +7280,7 @@ function InvoiceEditorPage({ invoice, isNew, client, onBack, onAddInvoice, onUpd
     dueDate,
     billToName,
     billToEmail,
+    billToPhone,
     billToAddress,
     lineItems,
     pricingMode,
@@ -7299,7 +7311,7 @@ function InvoiceEditorPage({ invoice, isNew, client, onBack, onAddInvoice, onUpd
   };
 
   const handlePrint = () => {
-    printInvoice({ client, docType, invoiceNumber, issueDate, dueDate, billToName, billToEmail, billToAddress, lineItems, taxRate, notes, pricingMode, manualTotal, payments: validPayments });
+    printInvoice({ client, docType, invoiceNumber, issueDate, dueDate, billToName, billToEmail, billToPhone, billToAddress, lineItems, taxRate, notes, pricingMode, manualTotal, payments: validPayments });
   };
 
   if (!client) {
@@ -7375,6 +7387,10 @@ function InvoiceEditorPage({ invoice, isNew, client, onBack, onAddInvoice, onUpd
           <div>
             <label className="block text-xs font-semibold mb-1" style={{ color: COLORS.charcoal }}>Email</label>
             <input type="text" value={billToEmail} onChange={(e) => setBillToEmail(e.target.value)} className="w-full border rounded-sm px-3 py-2 text-sm outline-none" style={{ borderColor: "#D8DCE1", color: COLORS.charcoal }} />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold mb-1" style={{ color: COLORS.charcoal }}>Phone</label>
+            <input type="text" value={billToPhone} onChange={(e) => setBillToPhone(e.target.value)} className="w-full border rounded-sm px-3 py-2 text-sm outline-none" style={{ borderColor: "#D8DCE1", color: COLORS.charcoal }} />
           </div>
           <div className="col-span-2">
             <label className="block text-xs font-semibold mb-1" style={{ color: COLORS.charcoal }}>Address</label>
@@ -7559,7 +7575,7 @@ function InvoiceEditorPage({ invoice, isNew, client, onBack, onAddInvoice, onUpd
         </div>
 
         <div className="mb-5">
-          <label className="block text-xs font-semibold mb-1" style={{ color: COLORS.charcoal }}>Payment Instructions</label>
+          <label className="block text-xs font-semibold mb-1" style={{ color: COLORS.charcoal }}>Notes</label>
           <textarea
             value={notes}
             onChange={(e) => setNotes(e.target.value)}

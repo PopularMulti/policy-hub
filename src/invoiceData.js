@@ -10,6 +10,7 @@ function rowToInvoice(row) {
     dueDate: row.due_date || "",
     billToName: row.bill_to_name || "",
     billToEmail: row.bill_to_email || "",
+    billToPhone: row.bill_to_phone || "",
     billToAddress: row.bill_to_address || "",
     lineItems: row.line_items || [],
     pricingMode: row.pricing_mode || "itemized",
@@ -32,6 +33,7 @@ function invoiceToRow(invoice) {
   if ("dueDate" in invoice) row.due_date = invoice.dueDate;
   if ("billToName" in invoice) row.bill_to_name = invoice.billToName;
   if ("billToEmail" in invoice) row.bill_to_email = invoice.billToEmail;
+  if ("billToPhone" in invoice) row.bill_to_phone = invoice.billToPhone;
   if ("billToAddress" in invoice) row.bill_to_address = invoice.billToAddress;
   if ("lineItems" in invoice) row.line_items = invoice.lineItems;
   if ("pricingMode" in invoice) row.pricing_mode = invoice.pricingMode;

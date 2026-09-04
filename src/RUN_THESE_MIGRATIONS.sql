@@ -4,8 +4,10 @@
 --
 -- This is the exact same statements as 006_invoice_pricing_mode.sql,
 -- 007_invoice_client_description.sql, 008_invoice_payments.sql,
--- 009_customer_property_info.sql, and 010_customer_middle_name.sql,
--- combined into one file so there's only one thing to run.
+-- 009_customer_property_info.sql, 010_customer_middle_name.sql, and
+-- 012_invoice_bill_to_phone.sql, combined into one file so there's only
+-- one thing to run. (011 is a standalone cleanup script, not a schema
+-- change, so it's intentionally not included here.)
 -- If you already ran some of these individually, running this again is
 -- safe — every line uses "if not exists" so it won't error or duplicate.
 
@@ -24,3 +26,6 @@ alter table customers add column if not exists property_info jsonb default '{}':
 
 -- 010: Optional middle name on customers
 alter table customers add column if not exists middle_name text default '';
+
+-- 012: Phone number on invoice "Bill To" info
+alter table invoices add column if not exists bill_to_phone text default '';
