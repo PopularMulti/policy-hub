@@ -1,0 +1,172 @@
+From d939c09a4096e3a4f371e4e29e83eddc702ea926 Mon Sep 17 00:00:00 2001
+From: Claude <noreply@anthropic.com>
+Date: Fri, 4 Sep 2026 17:45:02 +0000
+Subject: [PATCH] Rename invoice Payment Instructions to Notes, add Bill To
+ phone field, fix CSS-escaping bug in print footer
+
+- "Payment Instructions" label on the invoice/proposal editor is now "Notes"
+- Added a Phone field to the invoice "Bill To" section (saved, printed, and
+  wired through invoiceData.js as bill_to_phone)
+- Fixed the printed invoice/proposal footer showing a literal "&amp;" instead
+  of "&" in business names - it was being run through the HTML escaper
+  instead of a CSS-string escaper for the CSS content: "..." print footer
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_017BmuYvXDS789rX5NPdnUT6
+---
+ src/012_invoice_bill_to_phone.sql |  5 +++++
+ src/App.jsx                       | 24 ++++++++++++++++++++----
+ src/RUN_THESE_MIGRATIONS.sql      |  9 +++++++--
+ src/invoiceData.js                |  2 ++
+ 4 files changed, 34 insertions(+), 6 deletions(-)
+ create mode 100644 src/012_invoice_bill_to_phone.sql
+
+diff --git a/src/012_invoice_bill_to_phone.sql b/src/012_invoice_bill_to_phone.sql
+new file mode 100644
+index 0000000..4e2cf44
+--- /dev/null
++++ b/src/012_invoice_bill_to_phone.sql
+@@ -0,0 +1,5 @@
++-- Popular Multiservice - Policy Hub
++-- Migration 012: Phone number on invoice "Bill To" info
++-- Run this in Supabase: Project → SQL Editor → New Query → paste → Run
++
++alter table invoices add column if not exists bill_to_phone text default '';
+diff --git a/src/App.jsx b/src/App.jsx
+index 49c46e3..2c89815 100644
+--- a/src/App.jsx
++++ b/src/App.jsx
+@@ -2307,6 +2307,15 @@ function escapeHtml(value) {
+   return String(value || "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+ }
+ 
++// For text embedded in a CSS content: "..." string (e.g. the @page print
++// footer below) rather than HTML markup - CSS strings don't understand HTML
++// entities like &amp;, so escapeHtml() would make "&" show up literally as
++// the text "&amp;" on the page. Only backslash and the enclosing quote character
++// need escaping here.
++function escapeCssString(value) {
++  return String(value || "").replace(/[\\"]/g, (c) => `\\${c}`);
++}
++
+ const PDF_TRANSLATIONS = {
+   en: {
+     title: "Quote Comparison",
+@@ -6985,7 +6994,7 @@ function InvoiceClientProfilePage({ client, invoices, onBack, onUpdateClient, on
+   );
+ }
+ 
+-function printInvoice({ client, docType, invoiceNumber, issueDate, dueDate, billToName, billToEmail, billToAddress, lineItems, taxRate, notes, pricingMode, manualTotal, payments }) {
++function printInvoice({ client, docType, invoiceNumber, issueDate, dueDate, billToName, billToEmail, billToPhone, billToAddress, lineItems, taxRate, notes, pricingMode, manualTotal, payments }) {
+   const label = docType === "Proposal" ? "Proposal" : "Invoice";
+   const logoUrl = getLogoUrl(client?.logoPath);
+   const isSimple = pricingMode === "simple";
+@@ -7092,7 +7101,7 @@ function printInvoice({ client, docType, invoiceNumber, issueDate, dueDate, bill
+   @page {
+     margin: 0.4in 0.4in 0.65in 0.4in;
+     @bottom-center {
+-      content: "${escapeHtml(client?.businessName || "")} \u00b7 ${label} ${escapeHtml(invoiceNumber || "")} \u2014 Page " counter(page) " of " counter(pages);
++      content: "${escapeCssString(client?.businessName || "")} \u00b7 ${label} ${escapeCssString(invoiceNumber || "")} \u2014 Page " counter(page) " of " counter(pages);
+       font-size: 9px;
+       color: #999999;
+     }
+@@ -7121,6 +7130,7 @@ function printInvoice({ client, docType, invoiceNumber, issueDate, dueDate, bill
+         ${billToName ? `<p>${escapeHtml(billToName)}</p>` : ""}
+         ${billToAddress ? `<p>${escapeHtml(billToAddress)}</p>` : ""}
+         ${billToEmail ? `<p>${escapeHtml(billToEmail)}</p>` : ""}
++        ${billToPhone ? `<p>${escapeHtml(billToPhone)}</p>` : ""}
+       </div>
+       <div class="invoice-facts">
+         ${issueDate ? `<div><span class="label">Date:</span><span class="value">${escapeHtml(issueDate)}</span></div>` : ""}
+@@ -7184,6 +7194,7 @@ function InvoiceEditorPage({ invoice, isNew, client, onBack, onAddInvoice, onUpd
+   const [dueDate, setDueDate] = useState(invoice?.dueDate || "");
+   const [billToName, setBillToName] = useState(invoice?.billToName || "");
+   const [billToEmail, setBillToEmail] = useState(invoice?.billToEmail || "");
++  const [billToPhone, setBillToPhone] = useState(invoice?.billToPhone || "");
+   const [billToAddress, setBillToAddress] = useState(invoice?.billToAddress || "");
+   const [lineItems, setLineItems] = useState(invoice?.lineItems?.length ? invoice.lineItems : [blankLineItem()]);
+   const [pricingMode, setPricingMode] = useState(invoice?.pricingMode || "itemized");
+@@ -7269,6 +7280,7 @@ function InvoiceEditorPage({ invoice, isNew, client, onBack, onAddInvoice, onUpd
+     dueDate,
+     billToName,
+     billToEmail,
++    billToPhone,
+     billToAddress,
+     lineItems,
+     pricingMode,
+@@ -7299,7 +7311,7 @@ function InvoiceEditorPage({ invoice, isNew, client, onBack, onAddInvoice, onUpd
+   };
+ 
+   const handlePrint = () => {
+-    printInvoice({ client, docType, invoiceNumber, issueDate, dueDate, billToName, billToEmail, billToAddress, lineItems, taxRate, notes, pricingMode, manualTotal, payments: validPayments });
++    printInvoice({ client, docType, invoiceNumber, issueDate, dueDate, billToName, billToEmail, billToPhone, billToAddress, lineItems, taxRate, notes, pricingMode, manualTotal, payments: validPayments });
+   };
+ 
+   if (!client) {
+@@ -7376,6 +7388,10 @@ function InvoiceEditorPage({ invoice, isNew, client, onBack, onAddInvoice, onUpd
+             <label className="block text-xs font-semibold mb-1" style={{ color: COLORS.charcoal }}>Email</label>
+             <input type="text" value={billToEmail} onChange={(e) => setBillToEmail(e.target.value)} className="w-full border rounded-sm px-3 py-2 text-sm outline-none" style={{ borderColor: "#D8DCE1", color: COLORS.charcoal }} />
+           </div>
++          <div>
++            <label className="block text-xs font-semibold mb-1" style={{ color: COLORS.charcoal }}>Phone</label>
++            <input type="text" value={billToPhone} onChange={(e) => setBillToPhone(e.target.value)} className="w-full border rounded-sm px-3 py-2 text-sm outline-none" style={{ borderColor: "#D8DCE1", color: COLORS.charcoal }} />
++          </div>
+           <div className="col-span-2">
+             <label className="block text-xs font-semibold mb-1" style={{ color: COLORS.charcoal }}>Address</label>
+             <input type="text" value={billToAddress} onChange={(e) => setBillToAddress(correctStateInAddressText(e.target.value))} className="w-full border rounded-sm px-3 py-2 text-sm outline-none" style={{ borderColor: "#D8DCE1", color: COLORS.charcoal }} />
+@@ -7559,7 +7575,7 @@ function InvoiceEditorPage({ invoice, isNew, client, onBack, onAddInvoice, onUpd
+         </div>
+ 
+         <div className="mb-5">
+-          <label className="block text-xs font-semibold mb-1" style={{ color: COLORS.charcoal }}>Payment Instructions</label>
++          <label className="block text-xs font-semibold mb-1" style={{ color: COLORS.charcoal }}>Notes</label>
+           <textarea
+             value={notes}
+             onChange={(e) => setNotes(e.target.value)}
+diff --git a/src/RUN_THESE_MIGRATIONS.sql b/src/RUN_THESE_MIGRATIONS.sql
+index ac83566..eec8a14 100644
+--- a/src/RUN_THESE_MIGRATIONS.sql
++++ b/src/RUN_THESE_MIGRATIONS.sql
+@@ -4,8 +4,10 @@
+ --
+ -- This is the exact same statements as 006_invoice_pricing_mode.sql,
+ -- 007_invoice_client_description.sql, 008_invoice_payments.sql,
+--- 009_customer_property_info.sql, and 010_customer_middle_name.sql,
+--- combined into one file so there's only one thing to run.
++-- 009_customer_property_info.sql, 010_customer_middle_name.sql, and
++-- 012_invoice_bill_to_phone.sql, combined into one file so there's only
++-- one thing to run. (011 is a standalone cleanup script, not a schema
++-- change, so it's intentionally not included here.)
+ -- If you already ran some of these individually, running this again is
+ -- safe — every line uses "if not exists" so it won't error or duplicate.
+ 
+@@ -24,3 +26,6 @@ alter table customers add column if not exists property_info jsonb default '{}':
+ 
+ -- 010: Optional middle name on customers
+ alter table customers add column if not exists middle_name text default '';
++
++-- 012: Phone number on invoice "Bill To" info
++alter table invoices add column if not exists bill_to_phone text default '';
+diff --git a/src/invoiceData.js b/src/invoiceData.js
+index ea0fd78..7ec873f 100644
+--- a/src/invoiceData.js
++++ b/src/invoiceData.js
+@@ -10,6 +10,7 @@ function rowToInvoice(row) {
+     dueDate: row.due_date || "",
+     billToName: row.bill_to_name || "",
+     billToEmail: row.bill_to_email || "",
++    billToPhone: row.bill_to_phone || "",
+     billToAddress: row.bill_to_address || "",
+     lineItems: row.line_items || [],
+     pricingMode: row.pricing_mode || "itemized",
+@@ -32,6 +33,7 @@ function invoiceToRow(invoice) {
+   if ("dueDate" in invoice) row.due_date = invoice.dueDate;
+   if ("billToName" in invoice) row.bill_to_name = invoice.billToName;
+   if ("billToEmail" in invoice) row.bill_to_email = invoice.billToEmail;
++  if ("billToPhone" in invoice) row.bill_to_phone = invoice.billToPhone;
+   if ("billToAddress" in invoice) row.bill_to_address = invoice.billToAddress;
+   if ("lineItems" in invoice) row.line_items = invoice.lineItems;
+   if ("pricingMode" in invoice) row.pricing_mode = invoice.pricingMode;
+-- 
+2.43.0
+
